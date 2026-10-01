@@ -91,7 +91,7 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 | `YT_EXCLUDE_TERMS` | `upin ipin,...` | Istilah hiburan/noise yang dikeluarkan dari feed YouTube |
 | `VIDEO_CLASSIFIER` | `auto` | Gemini bila tersedia, lalu fallback aturan |
 | `GEMINI_API_KEY` | kosong | Klasifikasi judul dan fitur AI tahap lanjut |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Model Gemini |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Model Gemini; fallback leksikon tetap dipakai bila API sibuk/gagal |
 | `MAPS_PROVIDER` | `apify` | Provider Maps POC (`apify` atau `places` untuk integrasi berikutnya) |
 | `APIFY_TOKEN` | kosong | Token server Apify; jangan pernah dikirim ke browser |
 | `APIFY_ACTOR_ID` | `compass~crawler-google-places` | Actor Google Maps yang dijalankan |
