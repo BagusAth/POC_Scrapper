@@ -42,9 +42,11 @@ source .venv/bin/activate
 python scripts/yt_trend_probe.py "cappuccino cincau"
 python scripts/yt_trend_probe.py "keripik pisang"
 python scripts/maps_probe.py "sepatu lokal" --city Bandung
+python scripts/social_probe.py "sepatu lokal" --platform tiktok
+python scripts/social_probe.py "sepatu lokal" --platform instagram
 ```
 
-Probe YouTube mencetak query, jumlah kandidat/relevan, komposisi konten, video teratas, dan unit API yang dipakai. Probe Maps menjalankan satu Actor Apify dan hanya mencetak ringkasan tempat relevan; tanpa token probe berhenti sebelum mengirim request.
+Probe YouTube mencetak query, jumlah kandidat/relevan, komposisi konten, video teratas, dan unit API yang dipakai. Probe Maps menjalankan satu Actor Apify dan hanya mencetak ringkasan tempat relevan. Probe sosial menjalankan satu Actor per platform dan mencetak post relevan tanpa menulis ke database utama; tanpa token probe berhenti sebelum mengirim request.
 
 ## Konfigurasi utama
 
