@@ -17,4 +17,6 @@ export const api = {
   videos: (topicId, sort, type) => request(`/api/trend/videos?${query({ topic_id: topicId, sort, type })}`),
   mapsPlaces: (topicId) => request(`/api/maps/places?${query({ topic_id: topicId })}`),
   mapsFeed: (topicId, limit = 30) => request(`/api/maps/feed?${query({ topic_id: topicId, limit })}`),
+  socialFeed: (topicId, platform, limit = 100) => request(`/api/social/feed?${query({ topic_id: topicId, platform, limit })}`),
+  socialStats: (topicId) => request(`/api/social/stats?${query({ topic_id: topicId })}`),
 };

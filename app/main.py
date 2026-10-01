@@ -24,6 +24,7 @@ from app.api.routes_stream import create_stream_router
 from app.api.routes_summary import SummaryService, create_summary_router
 from app.api.routes_topics import create_topics_router
 from app.api.routes_maps import create_maps_router, create_places_compat_router
+from app.api.routes_social import create_social_router
 from app.api.routes_trend import create_trend_router
 from app.api.routes_usage import create_usage_router
 from app.collectors.runner import CollectorRunner, build_collectors
@@ -33,6 +34,9 @@ from app.events import EventBroker
 from app.maps.usage import MapsUsageTracker
 from app.maps.apify_client import ApifyMapsClient
 from app.maps.collector import MapsCollector
+from app.social.usage import SocialUsageTracker
+from app.social.apify_client import SocialApifyClient
+from app.social.collector import SocialCollector
 from app.products import ProductCatalog
 from app.topics.service import TopicService
 from app.youtube.client import PublicYouTubeClient, YouTubeClient
@@ -71,6 +75,11 @@ def create_app(
         database, daily_cap=runtime.maps_daily_request_cap,
         monthly_cap=runtime.maps_monthly_request_cap,
     )
+    social_usage = SocialUsageTracker(
+        database,
+        daily_cap=runtime.social_daily_run_cap,
+        monthly_cap=runtime.social_monthly_run_cap,
+    )
     maps_client: ApifyMapsClient | None = None
     maps_collector: MapsCollector | None = None
     if (
@@ -80,6 +89,14 @@ def create_app(
     ):
         maps_client = ApifyMapsClient(runtime, maps_usage)
         maps_collector = MapsCollector(database, maps_client, runtime, broker)
+    social_client: SocialApifyClient | None = None
+    social_collector: SocialCollector | None = None
+    if (
+        runtime.apify_token
+        and {"tiktok", "instagram"}.intersection(runtime.active_sources)
+    ):
+        social_client = SocialApifyClient(runtime, social_usage)
+        social_collector = SocialCollector(database, social_client, runtime, broker)
     youtube_client: YouTubeClient | PublicYouTubeClient | None = None
     if "youtube_trend" in runtime.active_sources:
         youtube_client = (
@@ -113,7 +130,7 @@ def create_app(
         if youtube_client else None
     )
     trend_scheduler = TrendScheduler(
-        runtime, database, broker, discovery, snapshot, maps_collector
+        runtime, database, broker, discovery, snapshot, maps_collector, social_collector
     )
     topic_service = TopicService(database, runtime)
     summary_service = SummaryService(database, runtime, worker=worker, limiter=worker.limiter)
@@ -138,8 +155,11 @@ def create_app(
         application.state.youtube_client = youtube_client
         application.state.youtube_quota = youtube_quota
         application.state.maps_usage = maps_usage
+        application.state.social_usage = social_usage
         application.state.maps_client = maps_client
         application.state.maps_collector = maps_collector
+        application.state.social_client = social_client
+        application.state.social_collector = social_collector
         application.state.analyzer_worker = worker
         try:
             yield
@@ -157,6 +177,8 @@ def create_app(
                 await youtube_client.close()
             if maps_client:
                 await maps_client.close()
+            if social_client:
+                await social_client.close()
             await database.close()
 
     application = FastAPI(
@@ -181,13 +203,20 @@ def create_app(
     application.include_router(
         create_health_router(runtime, worker, lambda: runtime.active_sources)
     )
-    application.include_router(create_usage_router(youtube_quota, maps_usage))
+    application.include_router(
+        create_usage_router(
+            youtube_quota,
+            maps_usage,
+            social_usage if {"tiktok", "instagram"}.intersection(runtime.active_sources) else None,
+        )
+    )
     application.include_router(
         create_topics_router(database, topic_service, trend_scheduler, runtime)
     )
     application.include_router(create_trend_router(database))
     application.include_router(create_maps_router(database))
     application.include_router(create_places_compat_router(database))
+    application.include_router(create_social_router(database))
     application.include_router(create_stream_router(broker))
 
     # Transitional v2 endpoints remain available while Maps opinion work starts at M4.

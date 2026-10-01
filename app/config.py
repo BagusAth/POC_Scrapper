@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     maps_content_ttl_days: int = 7
     default_city: str = "Bandung"
 
+    # Social trend discovery uses the same server-side Apify token. Defaults
+    # favor broad post coverage without paid media downloads or comments.
+    tiktok_actor_id: str = "clockworks~tiktok-scraper"
+    instagram_actor_id: str = "apify~instagram-scraper"
+    social_results_per_query: int = 50
+    social_max_queries_per_topic: int = 3
+    social_lookback_days: int = 30
+    social_refresh_hours: float = 12.0
+    social_daily_run_cap: int = 12
+    social_monthly_run_cap: int = 300
+    social_comments_enabled: bool = False
+
     demo_mode: bool = False
     demo_stats_interval_seconds: float = 120.0
     demo_budget_units: int = 1_500
@@ -91,6 +103,8 @@ class Settings(BaseSettings):
         "yt_search_date_pages", "yt_max_videos_per_topic", "maps_max_pages",
         "maps_max_places_per_search", "maps_max_reviews_per_place",
         "maps_daily_request_cap", "maps_monthly_request_cap", "maps_content_ttl_days",
+        "social_results_per_query", "social_max_queries_per_topic",
+        "social_lookback_days", "social_daily_run_cap", "social_monthly_run_cap",
         "demo_budget_units", "max_active_topics", "gemini_rpm", "batch_size",
         "max_gemini_failures", "summary_min_reviews", "max_comment_chars",
         "comment_max_age_days",
@@ -105,6 +119,7 @@ class Settings(BaseSettings):
         "replay_interval_seconds", "yt_search_refresh_hours", "yt_stats_interval_minutes",
         "youtube_http_timeout_seconds", "maps_refresh_hours",
         "apify_poll_interval_seconds", "apify_poll_timeout_seconds",
+        "social_refresh_hours",
         "demo_stats_interval_seconds", "batch_max_wait_seconds",
         "collect_interval_seconds",
     )
@@ -123,7 +138,10 @@ class Settings(BaseSettings):
 
     @property
     def active_sources(self) -> list[str]:
-        aliases = {"youtube": "youtube_trend", "gmaps": "maps"}
+        aliases = {
+            "youtube": "youtube_trend", "gmaps": "maps",
+            "ig": "instagram", "tiktok_trend": "tiktok",
+        }
         values = (
             aliases.get(part.strip().lower(), part.strip().lower())
             for part in self.sources.split(",")

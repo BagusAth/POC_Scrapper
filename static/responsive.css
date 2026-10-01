@@ -28,6 +28,7 @@
   .table-scroller { margin-top: 14px; } th, td { padding: 11px 9px; }.video-title { max-width: 245px; }
   .maps-preview { grid-template-columns: auto 1fr; margin: 0 13px 13px; padding: 17px; }.maps-preview > .source-chip { grid-column: 1 / -1; justify-self: start; }
   .maps-panel { margin: 0 13px 13px; padding: 18px 10px 10px; }.maps-panel > .panel-heading { padding: 0 8px; }.maps-data-grid { grid-template-columns: 1fr; gap: 18px; }.maps-subtitle { padding: 0 8px; }
+  .social-panel { margin: 0 13px 13px; padding: 18px 10px 10px; }.social-panel > .panel-heading { padding: 0 8px; }.social-feed-list { grid-template-columns: 1fr; }
   .topic-dialog form { padding: 21px; }.dialog-heading h2 { font-size: 21px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition-duration: .001ms !important; } }

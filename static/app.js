@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { state } from "./state.js";
-import { renderHealth, renderLoading, renderMaps, renderMetrics, renderTopics, renderVideos, setConnection, showBanner, showToast } from "./ui.js";
+import { renderHealth, renderLoading, renderMaps, renderMetrics, renderSocial, renderTopics, renderVideos, setConnection, showBanner, showToast } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 let stream;
@@ -13,11 +13,11 @@ async function loadTopics(preferredId = "") {
   renderTopics(); return state.activeTopicId;
 }
 async function refreshTrend({ quiet = false } = {}) {
-  if (!state.activeTopicId) { state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; renderMetrics(); renderVideos(); renderMaps(); return; }
+  if (!state.activeTopicId) { state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null; renderMetrics(); renderVideos(); renderMaps(); renderSocial(); return; }
   if (!quiet) renderLoading(true);
   try {
-    const [metrics, videoPayload, placesPayload, feedPayload] = await Promise.all([api.trend(state.activeTopicId), api.videos(state.activeTopicId, state.videoSort, state.videoType), api.mapsPlaces(state.activeTopicId), api.mapsFeed(state.activeTopicId)]);
-    state.metrics = metrics; state.videos = videoPayload.items || []; state.mapsPlaces = placesPayload.items || []; state.mapsFeed = feedPayload.items || []; renderMetrics(); renderVideos(); renderMaps();
+    const [metrics, videoPayload, placesPayload, feedPayload, socialPayload, socialStats] = await Promise.all([api.trend(state.activeTopicId), api.videos(state.activeTopicId, state.videoSort, state.videoType), api.mapsPlaces(state.activeTopicId), api.mapsFeed(state.activeTopicId), api.socialFeed(state.activeTopicId), api.socialStats(state.activeTopicId)]);
+    state.metrics = metrics; state.videos = videoPayload.items || []; state.mapsPlaces = placesPayload.items || []; state.mapsFeed = feedPayload.items || []; state.socialPosts = socialPayload.items || []; state.socialStats = socialStats; renderMetrics(); renderVideos(); renderMaps(); renderSocial();
   } catch (error) { showToast(`Tren belum dapat dimuat: ${error.message}`); }
   finally { renderLoading(false); }
 }
@@ -49,7 +49,7 @@ async function createTopic(event) {
   const payload = { name: $("topic-name").value.trim(), keywords: state.suggestion.keywords, product_terms: state.suggestion.product_terms, exclude_terms: state.suggestion.exclude_terms || [], category: $("topic-category").value, cities: [$("topic-city").value.trim()] };
   try {
     const topic = await api.createTopic(payload); closeDialog(); await loadTopics(topic.id); renderTopics();
-    state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; renderMetrics(); renderVideos(); renderMaps();
+    state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null; renderMetrics(); renderVideos(); renderMaps(); renderSocial();
     showBanner("discovering", `Mencari video YouTube yang relevan untuk “${topic.name}”. Hasil akan muncul otomatis.`);
     clearTimeout(topicRefreshTimer); topicRefreshTimer = setTimeout(async () => { await loadTopics(topic.id); await refreshTrend({ quiet: true }); }, 5000);
   } catch (error) { $("topic-error").textContent = error.message; $("topic-error").hidden = false; }

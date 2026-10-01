@@ -117,6 +117,43 @@ CREATE TABLE IF NOT EXISTS summaries (
     analyzer TEXT NOT NULL,
     generated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS social_posts (
+    platform TEXT NOT NULL,
+    post_id TEXT NOT NULL,
+    topic_id TEXT NOT NULL REFERENCES topics(id),
+    text TEXT NOT NULL,
+    author_name TEXT,
+    author_url TEXT,
+    url TEXT,
+    published_at TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    query TEXT,
+    mentions_product INTEGER NOT NULL DEFAULT 0,
+    views INTEGER,
+    likes INTEGER,
+    comments INTEGER,
+    shares INTEGER,
+    PRIMARY KEY (platform, post_id, topic_id)
+);
+CREATE INDEX IF NOT EXISTS idx_social_posts_topic ON social_posts(topic_id, published_at DESC);
+CREATE TABLE IF NOT EXISTS social_post_stats (
+    platform TEXT NOT NULL,
+    post_id TEXT NOT NULL,
+    topic_id TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    views INTEGER,
+    likes INTEGER,
+    comments INTEGER,
+    shares INTEGER,
+    PRIMARY KEY (platform, post_id, topic_id, captured_at)
+);
+CREATE TABLE IF NOT EXISTS social_refreshes (
+    topic_id TEXT NOT NULL REFERENCES topics(id),
+    platform TEXT NOT NULL,
+    refreshed_at TEXT NOT NULL,
+    PRIMARY KEY (topic_id, platform)
+);
 CREATE TABLE IF NOT EXISTS api_usage (
     day TEXT NOT NULL,
     api TEXT NOT NULL,
@@ -410,6 +447,86 @@ class Database:
         )
         await self._conn().commit()
         return deleted
+
+    async def upsert_social_post(
+        self, *, platform: str, post_id: str, topic_id: str, text: str,
+        author_name: str | None, author_url: str | None, url: str | None,
+        published_at: datetime, seen_at: datetime, query: str | None,
+        mentions_product: bool, views: int | None, likes: int | None,
+        comments: int | None, shares: int | None,
+    ) -> bool:
+        timestamp = to_utc_iso(seen_at)
+        existing = await self._conn().execute(
+            "SELECT 1 FROM social_posts WHERE platform=? AND post_id=? AND topic_id=?",
+            (platform, post_id, topic_id),
+        )
+        is_new = await existing.fetchone() is None
+        cursor = await self._conn().execute(
+            """INSERT INTO social_posts
+               (platform,post_id,topic_id,text,author_name,author_url,url,published_at,
+                first_seen_at,last_seen_at,query,mentions_product,views,likes,comments,shares)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(platform,post_id,topic_id) DO UPDATE SET
+                text=excluded.text,author_name=excluded.author_name,author_url=excluded.author_url,
+                url=excluded.url,last_seen_at=excluded.last_seen_at,query=excluded.query,
+                mentions_product=excluded.mentions_product,views=excluded.views,likes=excluded.likes,
+                comments=excluded.comments,shares=excluded.shares""",
+            (
+                platform, post_id, topic_id, text, author_name, author_url, url,
+                to_utc_iso(published_at), timestamp, timestamp, query,
+                int(mentions_product), views, likes, comments, shares,
+            ),
+        )
+        await self._conn().execute(
+            """INSERT OR REPLACE INTO social_post_stats
+               (platform,post_id,topic_id,captured_at,views,likes,comments,shares)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (platform, post_id, topic_id, timestamp, views, likes, comments, shares),
+        )
+        await self._conn().commit()
+        return is_new and cursor.rowcount == 1
+
+    async def update_social_refresh(self, topic_id: str, platform: str, refreshed_at: datetime) -> None:
+        await self._conn().execute(
+            """INSERT INTO social_refreshes(topic_id,platform,refreshed_at) VALUES (?,?,?)
+               ON CONFLICT(topic_id,platform) DO UPDATE SET refreshed_at=excluded.refreshed_at""",
+            (topic_id, platform, to_utc_iso(refreshed_at)),
+        )
+        await self._conn().commit()
+
+    async def get_social_last_refresh(self, topic_id: str, platform: str) -> datetime | None:
+        cursor = await self._conn().execute(
+            "SELECT refreshed_at FROM social_refreshes WHERE topic_id=? AND platform=?",
+            (topic_id, platform),
+        )
+        row = await cursor.fetchone()
+        return from_iso(row[0]) if row else None
+
+    async def list_social_posts(
+        self, topic_id: str, *, platform: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        clauses, params = ["topic_id=?", "mentions_product=1"], [topic_id]
+        if platform:
+            clauses.append("platform=?")
+            params.append(platform)
+        params.append(min(max(limit, 1), 500))
+        cursor = await self._conn().execute(
+            f"""SELECT * FROM social_posts WHERE {' AND '.join(clauses)}
+                ORDER BY published_at DESC,post_id DESC LIMIT ?""",
+            params,
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+    async def social_stats(self, topic_id: str) -> dict[str, Any]:
+        cursor = await self._conn().execute(
+            """SELECT platform,COUNT(*) AS posts,COALESCE(SUM(views),0) AS views,
+                      COALESCE(SUM(likes),0) AS likes,COALESCE(SUM(comments),0) AS comments,
+                      COALESCE(SUM(shares),0) AS shares
+               FROM social_posts WHERE topic_id=? AND mentions_product=1 GROUP BY platform""",
+            (topic_id,),
+        )
+        rows = [dict(row) for row in await cursor.fetchall()]
+        return {"platforms": rows, "total_posts": sum(int(row["posts"]) for row in rows)}
 
     async def deactivate_topic(self, topic_id: str) -> bool:
         cursor = await self._conn().execute(

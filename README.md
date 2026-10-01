@@ -4,8 +4,9 @@ POC v3 membantu UMKM membaca dua sinyal yang berbeda:
 
 - **YouTube untuk tren produk** — pasokan video, pertumbuhan views, format konten, dan sinyal persaingan.
 - **Google Maps untuk opini pelanggan** — tempat, rating, ulasan produk, dan pesaing lokal.
+- **TikTok + Instagram untuk sinyal konten** — post publik, caption, engagement, dan creator signal dari keyword/hashtag.
 
-Implementasi saat ini mencakup **P3/M3 + Maps POC**: fondasi data dan kuota, discovery YouTube, snapshot metrik, live ticker SSE, dashboard tren, serta kolektor opini Google Maps melalui Apify. Tanpa `APIFY_TOKEN`, aplikasi tidak melakukan request dan secara jujur menampilkan Maps belum dikonfigurasi.
+Implementasi saat ini mencakup **P3/M3 + Maps/Social POC**: fondasi data dan kuota, discovery YouTube, snapshot metrik, live ticker SSE, dashboard tren, kolektor opini Google Maps, serta discovery TikTok/Instagram melalui Apify. Tanpa `APIFY_TOKEN`, aplikasi tidak melakukan request dan secara jujur menampilkan sumber Apify belum dikonfigurasi.
 
 ## Jalankan dalam kurang dari 10 menit
 
@@ -31,7 +32,8 @@ Dashboard tidak memakai data demo untuk Panel A.
 - Komentar YouTube sengaja dimatikan (`YT_COMMENTS_ENABLED=false`). Komentar video sering membahas kreator/tutorial, bukan pengalaman terhadap produk.
 - Angka tren adalah sampel hasil pencarian, bukan seluruh YouTube. Produk niche memang dapat menunjukkan kenaikan kecil atau tidak ada video; aplikasi tidak mengarang angka untuk mengisi grafik.
 - Jika `APIFY_TOKEN` diisi, server menjalankan Actor `compass~crawler-google-places`, menunggu status `SUCCEEDED`, lalu mengambil dataset ulasan terbaru. Hasilnya difilter berdasarkan nama/kata produk sebelum masuk feed opini.
-- Jika token kosong, tidak ada data Maps sintetis yang dibuat; health API menampilkan `Google Maps (Apify) belum dikonfigurasi`.
+- Jika token kosong, tidak ada data Maps/TikTok/Instagram sintetis yang dibuat; health API menampilkan sumber Apify belum dikonfigurasi.
+- TikTok dan Instagram dikumpulkan dalam satu Actor run per platform/topik. Maksimal tiga keyword/hashtag digabung, sampai 50 post per query, lalu filter umur dan relevansi dilakukan lokal. Download video, thumbnail, avatar, transkripsi, AI description, dan crawl komentar dimatikan default.
 
 Uji satu kata produk tanpa mengubah database utama:
 
@@ -73,6 +75,15 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 | `MAPS_DAILY_REQUEST_CAP` | `30` | Hard cap request Maps per hari |
 | `MAPS_MONTHLY_REQUEST_CAP` | `800` | Hard cap request Maps per bulan |
 | `DEFAULT_CITY` | `Bandung` | Kota awal untuk topik baru |
+| `TIKTOK_ACTOR_ID` | `clockworks~tiktok-scraper` | Actor TikTok |
+| `INSTAGRAM_ACTOR_ID` | `apify~instagram-scraper` | Actor Instagram |
+| `SOCIAL_RESULTS_PER_QUERY` | `50` | Post per keyword/hashtag |
+| `SOCIAL_MAX_QUERIES_PER_TOPIC` | `3` | Keyword/hashtag per run |
+| `SOCIAL_LOOKBACK_DAYS` | `30` | Window post yang disimpan |
+| `SOCIAL_REFRESH_HOURS` | `12` | Interval refresh TikTok/Instagram |
+| `SOCIAL_DAILY_RUN_CAP` | `12` | Cap Actor run sosial per hari |
+| `SOCIAL_MONTHLY_RUN_CAP` | `300` | Cap Actor run sosial per bulan |
+| `SOCIAL_COMMENTS_ENABLED` | `false` | Komentar sengaja nonaktif untuk efisiensi |
 | `MAX_ACTIVE_TOPICS` | `5` | Batas topik aktif |
 | `DATABASE_PATH` | `data/app.db` | SQLite lokal |
 
@@ -91,6 +102,8 @@ Untuk mode API resmi:
 7. Buat Gemini key melalui Google AI Studio dan isi `GEMINI_API_KEY`.
 
 Referensi Actor: [input schema Google Maps Scraper](https://apify.com/compass/crawler-google-places/input-schema) dan [API Actor](https://apify.com/compass/crawler-google-places/api).
+
+Referensi sosial: [TikTok Scraper input](https://apify.com/clockworks/tiktok-scraper/input-schema), [TikTok API](https://apify.com/clockworks/tiktok-scraper/api), [Instagram Scraper input](https://apify.com/apify/instagram-scraper/input-schema), dan [Instagram API](https://apify.com/apify/instagram-scraper/api). Satu token Apify berlaku untuk semua Actor; token hanya dipakai server.
 
 Restart server setelah mengubah `.env`. Jangan pernah menggunakan key server di JavaScript browser.
 
@@ -117,6 +130,8 @@ Snapshot tidak diubah setelah ditulis. Event `trend_tick` dikirim lewat Server-S
 - `GET /api/trend/videos?topic_id=...&sort=gain&type=review` — tabel bukti video.
 - `GET /api/maps/places?topic_id=...` — tempat relevan dan snapshot rating dari koleksi Apify.
 - `GET /api/maps/feed?topic_id=...` — opini Maps yang lolos filter produk.
+- `GET /api/social/feed?topic_id=...&platform=tiktok|instagram` — post publik yang caption-nya relevan.
+- `GET /api/social/stats?topic_id=...` — jumlah post dan agregat engagement per platform.
 - `GET /api/stream` — `trend_tick`, `topic_status`, dan keep-alive.
 - `GET /docs` — dokumentasi OpenAPI interaktif.
 

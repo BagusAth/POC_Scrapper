@@ -46,10 +46,12 @@ def create_topics_router(
         items = []
         for topic in await database.list_topics():
             videos = await database.list_videos(topic.id)
+            social = await database.social_stats(topic.id)
             items.append({
                 **topic.model_dump(mode="json"),
                 "videos_tracked": len(videos),
                 "places_relevant": await database.count_relevant_places(topic.id),
+                "social_posts": social["total_posts"],
                 "yt_last_snapshot_at": await database.get_last_snapshot_at(topic.id),
                 "maps_last_refresh_at": topic.maps_last_refresh_at,
             })

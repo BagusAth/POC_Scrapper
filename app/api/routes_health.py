@@ -49,6 +49,13 @@ def create_health_router(
                 settings.apify_token if settings.maps_provider == "apify"
                 else settings.google_maps_api_key
             ),
+            "apify_configured": bool(settings.apify_token),
+            "tiktok_configured": bool(
+                settings.apify_token and "tiktok" in sources
+            ),
+            "instagram_configured": bool(
+                settings.apify_token and "instagram" in sources
+            ),
             "yt_comments_enabled": settings.yt_comments_enabled,
             "demo_mode": settings.demo_mode,
             "analyzer": analyzer,
@@ -64,6 +71,16 @@ def create_health_router(
                     else "Google Maps Places aktif"
                     if settings.maps_provider == "places" and settings.google_maps_api_key
                     else "Google Maps (Apify) belum dikonfigurasi"
+                ),
+                "tiktok": (
+                    f"TikTok Apify aktif ({settings.tiktok_actor_id})"
+                    if settings.apify_token and "tiktok" in sources
+                    else "TikTok Apify belum dikonfigurasi"
+                ),
+                "instagram": (
+                    f"Instagram Apify aktif ({settings.instagram_actor_id})"
+                    if settings.apify_token and "instagram" in sources
+                    else "Instagram Apify belum dikonfigurasi"
                 ),
             },
         }

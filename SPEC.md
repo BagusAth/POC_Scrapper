@@ -1,4 +1,4 @@
-# SPEC v3 — Pemantau Tren & Opini UMKM (YouTube Tren + Google Maps/Apify Opini)
+# SPEC v3 — Pemantau Tren & Opini UMKM (YouTube + Google Maps/TikTok/Instagram)
 
 > Spesifikasi untuk AI coding agent (Codex). Simpan di root repo sebagai `SPEC.md`.
 > **Menggantikan SPEC v2 dan PATCH v2.1.** Kerjakan per milestone (bagian 16), jangan sekaligus.
@@ -526,6 +526,12 @@ Semua metrik dihitung per topik dari tabel `videos` + `video_stats`. **Definisi 
 Untuk setiap topik dan kota, server mengirim `searchStringsArray`, `locationQuery`, `maxCrawledPlacesPerSearch`, `maxReviews`, `reviewsSort=newest`, `reviewsStartDate`, `reviewsOrigin=google`, `language=id`, `scrapePlaceDetailPage=true`, dan `scrapeReviewsPersonalData=false` ke Actor. Satu run dihitung sebagai satu unit `maps_apify_run`; polling status tidak menggandakan biaya. Dataset dinormalisasi, difilter relevansinya (nama/kata produk atau teks ulasan), lalu disimpan dengan TTL ulasan.
 
 Referensi kontrak Actor: [input schema Google Maps Scraper](https://apify.com/compass/crawler-google-places/input-schema), [Actor API](https://apify.com/compass/crawler-google-places/api), dan [Apify API authentication/run lifecycle](https://docs.apify.com/api/v2/getting-started).
+
+### 0.3 Provider sosial POC (implementasi saat ini)
+
+TikTok memakai `clockworks~tiktok-scraper` dan Instagram memakai `apify~instagram-scraper`. Satu run per platform/topik menggabungkan maksimal tiga query, menggunakan cap `SOCIAL_RESULTS_PER_QUERY`, dan mengambil post/caption/engagement tanpa media download, AI video processing, atau komentar. Penyaringan umur dan relevansi dilakukan lokal agar data yang masuk dashboard tetap hemat dan dapat diaudit. Komentar adalah tahap lanjutan terpisah karena biaya dan rate-limit lebih tinggi.
+
+Referensi: [TikTok input schema](https://apify.com/clockworks/tiktok-scraper/input-schema), [TikTok output](https://apify.com/clockworks/tiktok-scraper/output-schema), [Instagram input schema](https://apify.com/apify/instagram-scraper/input-schema), dan [Instagram API](https://apify.com/apify/instagram-scraper/api).
 
 ### 9.1 Provider Places API langsung (opsional, belum aktif)
 

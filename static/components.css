@@ -137,6 +137,15 @@ tbody tr:hover { background: #f7f6ef; }
 .maps-place-link { color: var(--text); font-weight: 760; text-decoration: none; }
 .maps-place-link:hover { color: var(--mint-ink); text-decoration: underline; }
 .maps-place-address { display: block; max-width: 230px; margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.social-panel { margin: 0 22px 22px; padding: 25px 27px 12px; }
+.social-feed-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+.social-feed-item { min-width: 0; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); padding: 12px; }
+.social-feed-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 9px; }
+.social-platform { color: var(--mint-ink); font-size: 9px; font-weight: 850; text-transform: uppercase; }
+.social-feed-author { margin-top: 8px; overflow: hidden; color: var(--text); font-size: 10px; font-weight: 780; text-overflow: ellipsis; white-space: nowrap; }
+.social-feed-text { display: -webkit-box; margin-top: 5px; overflow: hidden; color: var(--muted); font-size: 10px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.social-feed-metrics { display: flex; gap: 10px; margin-top: 9px; color: var(--muted); font-size: 9px; }
+.social-feed-link { display: inline-block; margin-top: 9px; color: var(--mint-ink); font-size: 9px; font-weight: 800; }
 
 .topic-dialog { width: min(560px, calc(100% - 30px)); max-height: calc(100vh - 40px); overflow-y: auto; border: 0; border-radius: 21px; background: var(--card); color: var(--text); padding: 0; box-shadow: 0 30px 100px rgb(0 0 0 / 45%); }
 .topic-dialog::backdrop { background: rgb(4 10 8 / 74%); backdrop-filter: blur(5px); }

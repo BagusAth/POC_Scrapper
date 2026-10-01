@@ -25,7 +25,8 @@ export function setConnection(connected) {
 }
 export function renderHealth() {
   const health = state.health || {}; const youtube = health.youtube_mode === "api" ? "YouTube API" : "YouTube publik"; const mapsActive = Boolean(health.maps_configured);
-  $("source-status").innerHTML = `<span class="source-chip is-on"><i></i>${youtube}</span><span class="source-chip ${mapsActive ? "is-on" : "is-off"}"><i></i>Google Maps</span>`;
+  const tiktokActive = Boolean(health.tiktok_configured); const instagramActive = Boolean(health.instagram_configured);
+  $("source-status").innerHTML = `<span class="source-chip is-on"><i></i>${youtube}</span><span class="source-chip ${mapsActive ? "is-on" : "is-off"}"><i></i>Google Maps</span>${health.sources_active?.includes("tiktok") ? `<span class="source-chip ${tiktokActive ? "is-on" : "is-off"}"><i></i>TikTok</span>` : ""}${health.sources_active?.includes("instagram") ? `<span class="source-chip ${instagramActive ? "is-on" : "is-off"}"><i></i>Instagram</span>` : ""}`;
   $("maps-status-badge").className = `source-chip ${mapsActive ? "is-on" : "is-off"}`; $("maps-status-badge").textContent = mapsActive ? `${health.maps_provider === "apify" ? "Apify aktif" : "Places aktif"}` : "Belum dikonfigurasi";
   $("maps-status-copy").textContent = mapsActive ? "Server menjalankan pencarian tempat dan ulasan terbaru melalui Apify." : "Isi APIFY_TOKEN di .env server untuk mengaktifkan pencarian tempat dan ulasan.";
 }
@@ -100,6 +101,17 @@ export function renderMaps() {
   const placeNames = Object.fromEntries(places.map((place) => [place.place_id, place.name]));
   $("maps-feed-list").innerHTML = feed.map((item) => `<article class="maps-feed-item"><div class="maps-feed-meta"><span class="maps-feed-stars">${item.stars == null ? "☆" : `${"★".repeat(Math.max(0, Math.min(5, Number(item.stars))))}${"☆".repeat(Math.max(0, 5 - Number(item.stars)))}`}</span><time>${item.created_at ? date.format(new Date(item.created_at)) : "Baru"}</time></div><p class="maps-feed-text">${escapeHtml(item.text)}</p><p class="maps-feed-place">${escapeHtml(placeNames[item.place_id] || "Google Maps")}</p></article>`).join("");
   $("maps-source-note").textContent = `Sumber: Google Maps melalui Apify · ${feed.length} opini tersimpan · ulasan difilter berdasarkan kata produk`;
+}
+export function renderSocial() {
+  const posts = state.socialPosts || [];
+  $("social-count-badge").textContent = `${posts.length} post`;
+  $("social-empty").hidden = posts.length > 0;
+  $("social-feed-list").innerHTML = posts.map((post) => {
+    const platform = post.platform === "tiktok" ? "TikTok" : "Instagram";
+    const metrics = [post.views == null ? null : `▶ ${number.format(post.views)}`, post.likes == null ? null : `♥ ${number.format(post.likes)}`, post.comments == null ? null : `◌ ${number.format(post.comments)}`].filter(Boolean).join(" · ");
+    return `<article class="social-feed-item"><div class="social-feed-meta"><span class="social-platform">${platform}</span><time>${post.published_at ? date.format(new Date(post.published_at)) : "Baru"}</time></div><p class="social-feed-author">${escapeHtml(post.author_name || "Akun publik")}</p><p class="social-feed-text">${escapeHtml(post.text)}</p><p class="social-feed-metrics">${escapeHtml(metrics || "Tanpa metrik")}</p>${post.url ? `<a class="social-feed-link" href="${escapeHtml(post.url)}" target="_blank" rel="noopener">Buka post ↗</a>` : ""}</article>`;
+  }).join("");
+  $("social-source-note").textContent = `Sumber: TikTok & Instagram melalui Apify · ${posts.length} post relevan · media/comment crawl dimatikan untuk efisiensi`;
 }
 let toastTimer;
 export function showToast(message) { const toast = $("toast"); toast.textContent = message; toast.classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("visible"), 4200); }
