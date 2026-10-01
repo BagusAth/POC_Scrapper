@@ -63,6 +63,7 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 | `YT_MAX_VIDEOS_PER_TOPIC` | `150` | Batas video per topik |
 | `YT_STATS_INTERVAL_MINUTES` | `60` | Interval snapshot statistik |
 | `YT_COMMENTS_ENABLED` | `false` | Wajib false pada v3 |
+| `YT_EXCLUDE_TERMS` | `upin ipin,...` | Istilah hiburan/noise yang dikeluarkan dari feed YouTube |
 | `VIDEO_CLASSIFIER` | `auto` | Gemini bila tersedia, lalu fallback aturan |
 | `GEMINI_API_KEY` | kosong | Klasifikasi judul dan fitur AI tahap lanjut |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Model Gemini |

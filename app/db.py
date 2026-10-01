@@ -714,6 +714,20 @@ class Database:
         await self._conn().commit()
         return cursor.rowcount
 
+    async def deactivate_videos(self, topic_id: str, video_ids: Sequence[str]) -> int:
+        """Deactivate a bounded set of videos rejected by a newer filter."""
+
+        ids = list(dict.fromkeys(str(video_id) for video_id in video_ids if video_id))
+        if not ids:
+            return 0
+        placeholders = ",".join("?" for _ in ids)
+        cursor = await self._conn().execute(
+            f"UPDATE videos SET is_active=0 WHERE topic_id=? AND video_id IN ({placeholders}) AND is_active=1",
+            [topic_id, *ids],
+        )
+        await self._conn().commit()
+        return cursor.rowcount
+
     async def insert_video_stats(self, stats: Sequence[VideoStat]) -> int:
         if not stats:
             return 0

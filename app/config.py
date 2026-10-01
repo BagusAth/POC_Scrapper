@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     yt_max_videos_per_topic: int = 150
     yt_stats_interval_minutes: float = 60.0
     yt_comments_enabled: bool = False
+    # Negative search terms keep entertainment/noise out of the UMKM feed.
+    # The same list is applied again after YouTube returns item details.
+    yt_exclude_terms: str = (
+        "upin ipin,kartun,animasi,animation,episode,full episode,serial,"
+        "sinetron,dongeng,cerita anak,nursery,kids,kidz,balita,lagu,lagu anak,music video,"
+        "official trailer,trailer,gaming,gameplay,meme,hiburan,komedi,parodi,"
+        "sketsa,film anak,tayangan anak"
+    )
     youtube_http_timeout_seconds: float = 10.0
 
     google_maps_api_key: str = ""
@@ -153,6 +161,14 @@ class Settings(BaseSettings):
     @property
     def sources_list(self) -> list[str]:
         return self.active_sources
+
+    @property
+    def youtube_exclude_terms(self) -> list[str]:
+        """Return normalized, de-duplicated YouTube noise terms."""
+
+        return list(dict.fromkeys(
+            term.strip() for term in self.yt_exclude_terms.split(",") if term.strip()
+        ))
 
 
 @lru_cache

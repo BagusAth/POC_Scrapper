@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from collections.abc import Iterable
 from typing import Any, Protocol
 
 from app.config import Settings
@@ -37,23 +38,71 @@ class DiscoveryResult:
     videos: list[Video]
 
 
-def build_query(topic: Topic) -> str:
+YOUTUBE_EXCLUDE_TERMS: tuple[str, ...] = (
+    "upin ipin", "kartun", "animasi", "animation", "episode", "full episode",
+    "serial", "sinetron", "dongeng", "cerita anak", "nursery", "kids", "kidz",
+    "balita", "lagu", "lagu anak", "music video", "official trailer", "trailer", "gaming",
+    "gameplay", "meme", "hiburan", "komedi", "parodi", "sketsa", "film anak",
+    "tayangan anak",
+)
+
+# These terms describe a product, a buying decision, or a small-business
+# context.  They make a generic topic such as "ayam goreng" less likely to
+# return entertainment content while still allowing recipes and product
+# reviews that do not literally say "UMKM".
+UMKM_INTENT_TERMS: tuple[str, ...] = (
+    "review", "resep", "resepnya", "cara membuat", "cara bikin", "tutorial", "jualan",
+    "jualannya", "terjual", "laku", "pedagang", "dagang", "bisnis",
+    "usaha", "umkm", "warung", "kedai", "kuliner", "jajanan", "makanan",
+    "minuman", "harga", "harganya", "menu", "order", "pesan", "homemade", "rumahan",
+    "buatan", "modal", "omzet", "produk", "brand", "lokal", "crispy",
+    "keju", "sambal", "bumbu", "bumbunya", "porsi", "rasa", "kemasan",
+    "produksi", "produsen", "outlet", "toko", "cabang", "pelanggan", "catering",
+    "katering", "supplier", "grosir", "franchise", "kemitraan", "unboxing", "testi", "testimoni",
+    "pasar", "tembus", "ekspor", "mancanegara", "murah", "affordable", "battle", "seduh",
+    "makan", "enak", "serba", "rekomendasi", "mukbang", "jajan", "beli", "viral", "ramai", "rame",
+)
+
+
+def _effective_excludes(extra_excludes: Iterable[str] = ()) -> list[str]:
+    """Always retain safe defaults while allowing project-specific additions."""
+
+    return list(dict.fromkeys([*YOUTUBE_EXCLUDE_TERMS, *extra_excludes]))
+
+
+def _contains_phrase(text: str, phrase: str) -> bool:
+    normalized = normalize(phrase)
+    return bool(normalized) and f" {normalized} " in f" {text} "
+
+
+def build_query(topic: Topic, *, extra_excludes: Iterable[str] = ()) -> str:
     terms = [f'"{keyword}"' if " " in keyword else keyword for keyword in topic.keywords]
-    excluded = [f'-"{term}"' if " " in term else f"-{term}" for term in topic.exclude_terms]
+    excluded_terms = list(dict.fromkeys([*topic.exclude_terms, *extra_excludes]))
+    excluded = [f'-"{term}"' if " " in term else f"-{term}" for term in excluded_terms]
     return "|".join(terms) + (" " + " ".join(excluded) if excluded else "")
 
 
-def is_relevant(item: dict[str, Any], topic: Topic) -> bool:
+def is_relevant(
+    item: dict[str, Any], topic: Topic, *, extra_excludes: Iterable[str] | None = None,
+) -> bool:
     if item.get("live_broadcast_content") == "upcoming":
         return False
     title = normalize(str(item.get("title", "")))
     description = normalize(str(item.get("description", ""))[:600])
-    combined = f"{title} {description}"
-    excludes = [normalize(term) for term in topic.exclude_terms]
-    if any(term and term in title for term in excludes):
+    channel = normalize(str(item.get("channel_title", "")))
+    combined = f"{title} {description} {channel}"
+    excludes = [*topic.exclude_terms, *_effective_excludes(extra_excludes or ())]
+    if any(_contains_phrase(combined, term) for term in excludes):
         return False
     signals = [normalize(value) for value in [*topic.keywords, *topic.product_terms]]
-    return any(signal and signal in combined for signal in signals)
+    if not any(signal and _contains_phrase(combined, signal) for signal in signals):
+        return False
+
+    # A topic mention alone is not sufficient: the video must also look like
+    # product, purchase, culinary, recipe, or small-business content.  This is
+    # the key guard against broad topics matching entertainment metadata.
+    has_intent = any(_contains_phrase(combined, term) for term in UMKM_INTENT_TERMS)
+    return has_intent
 
 
 class TrendDiscovery:
@@ -69,7 +118,10 @@ class TrendDiscovery:
     async def discover(self, topic: Topic, *, now: datetime | None = None) -> DiscoveryResult:
         current = now or datetime.now(timezone.utc)
         cutoff = current - timedelta(days=self.settings.yt_trend_lookback_days)
-        query = build_query(topic)
+        query = build_query(
+            topic,
+            extra_excludes=_effective_excludes(self.settings.youtube_exclude_terms),
+        )
         ids: list[str] = []
         pages = self.settings.yt_search_date_pages if self.client.mode == "api" else 1
         page_token: str | None = None
@@ -88,7 +140,10 @@ class TrendDiscovery:
             details.extend(await self.client.get_videos(unique_ids[start:start + 50]))
         filtered = [
             item for item in details
-            if is_relevant(item, topic) and self._published_at(item, current) >= cutoff
+            if (
+                is_relevant(item, topic, extra_excludes=self.settings.youtube_exclude_terms)
+                and self._published_at(item, current) >= cutoff
+            )
         ]
         filtered.sort(
             key=lambda item: (
@@ -103,6 +158,19 @@ class TrendDiscovery:
         source = "public_search" if self.client.mode == "public" else "search_date"
         videos = [self._video(item, topic.id, source, kinds[str(item["video_id"])], current) for item in filtered]
         await self.database.upsert_videos(videos)
+        # Invalidate noise that was stored by an earlier, looser version of
+        # the filter.  This makes the stricter feed effective immediately on
+        # the next discovery instead of waiting for the age-based cleanup.
+        existing = await self.database.list_videos(topic.id)
+        noise_ids = [
+            video.video_id for video in existing
+            if not is_relevant(
+                video.model_dump(mode="json"), topic,
+                extra_excludes=self.settings.youtube_exclude_terms,
+            )
+        ]
+        if noise_ids:
+            await self.database.deactivate_videos(topic.id, noise_ids)
         initial_stats = [
             VideoStat(
                 video_id=str(item["video_id"]), captured_at=current,
