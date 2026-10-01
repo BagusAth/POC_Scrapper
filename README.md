@@ -110,8 +110,8 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 | `SOCIAL_MAX_QUERIES_PER_TOPIC` | `3` | Keyword/hashtag per run |
 | `SOCIAL_LOOKBACK_DAYS` | `30` | Window post yang disimpan |
 | `SOCIAL_REFRESH_HOURS` | `12` | Interval refresh TikTok/Instagram |
-| `SOCIAL_DAILY_RUN_CAP` | `12` | Cap Actor run sosial per hari |
-| `SOCIAL_MONTHLY_RUN_CAP` | `300` | Cap Actor run sosial per bulan |
+| `SOCIAL_DAILY_RUN_CAP` | `18` | Cap Actor run sosial per hari (TikTok, Instagram, Facebook bersama) |
+| `SOCIAL_MONTHLY_RUN_CAP` | `450` | Cap Actor run sosial per bulan |
 | `SOCIAL_COMMENTS_ENABLED` | `false` | Komentar sengaja nonaktif untuk efisiensi |
 | `SOCIAL_SENTIMENT_ENABLED` | `true` | Analisis sentimen caption sosial yang relevan |
 | `MAX_ACTIVE_TOPICS` | `20` | Batas topik aktif |
