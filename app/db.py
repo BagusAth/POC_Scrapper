@@ -457,7 +457,12 @@ class Database:
     async def get_topic_feed(
         self, topic_id: str, *, limit: int = 50, before: tuple[datetime, str] | None = None
     ) -> list[Comment]:
-        clauses, params = ["topic_id=?"], [topic_id]
+        clauses, params = [
+            "topic_id=?",
+            "source='gmaps'",
+            "mentions_product=1",
+            "category='opini_produk'",
+        ], [topic_id]
         if before:
             cursor_time = to_utc_iso(before[0])
             clauses.append("(created_at<? OR (created_at=? AND id<?))")
@@ -779,7 +784,8 @@ class Database:
     async def usage_add(self, day: str, api: str, units: int) -> int:
         await self._conn().execute(
             """INSERT INTO api_usage(day,api,units) VALUES (?,?,?)
-               ON CONFLICT(day,api) DO UPDATE SET units=units+excluded.units""",
+               ON CONFLICT(day,api) DO UPDATE
+               SET units=api_usage.units+excluded.units""",
             (day, api, units),
         )
         await self._conn().commit()

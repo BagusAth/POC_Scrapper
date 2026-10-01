@@ -115,7 +115,7 @@ export function renderMaps() {
   $("maps-places-body").innerHTML = relevantPlaces.map((place) => `<tr><td><a class="maps-place-link" href="${escapeHtml(place.maps_uri || "#")}" target="_blank" rel="noopener">${escapeHtml(place.name || "Tempat")}</a><small class="maps-place-address">${escapeHtml(place.address || "")}</small></td><td>${escapeHtml(place.city || "—")}</td><td class="numeric">${place.rating == null ? "—" : Number(place.rating).toFixed(1)}</td><td class="numeric">${place.user_rating_count == null ? "—" : fullNumber.format(place.user_rating_count)}</td></tr>`).join("");
   const placeNames = Object.fromEntries(places.map((place) => [place.place_id, place.name]));
   $("maps-feed-list").innerHTML = feed.map((item) => `<article class="maps-feed-item"><div class="maps-feed-meta"><span class="maps-feed-stars">${item.stars == null ? "☆" : `${"★".repeat(Math.max(0, Math.min(5, Number(item.stars))))}${"☆".repeat(Math.max(0, 5 - Number(item.stars)))}`}</span><time>${item.created_at ? date.format(new Date(item.created_at)) : "Baru"}</time></div><p class="maps-feed-text">${escapeHtml(item.text)}</p><p class="maps-feed-place">${escapeHtml(placeNames[item.place_id] || "Google Maps")}</p></article>`).join("");
-  $("maps-source-note").textContent = `Sumber: Google Maps melalui Apify · ${feed.length} opini tersimpan · ulasan difilter berdasarkan kata produk`;
+  $("maps-source-note").textContent = `Sumber: Google Maps melalui Apify · ${feed.length} opini produk tersaring · ulasan tempat tidak dicampurkan`;
 }
 function renderSocialTrend(daily) {
   const items = (daily || []).filter((item) => item.date && (item.positif || item.negatif || item.netral));

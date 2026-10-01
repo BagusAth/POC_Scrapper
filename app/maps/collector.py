@@ -78,9 +78,10 @@ class MapsCollector:
                 if not relevant:
                     continue
                 for review, review_hit in zip(place.reviews, review_hits, strict=False):
-                    # A matching place name is enough to retain a review: many
-                    # Google reviews say "mantap" without repeating the brand.
-                    mentions = bool(review_hit or name_hit)
+                    # A matching business name makes the place relevant, but
+                    # it must not turn service/parking reviews into product
+                    # opinions. Product feed items need a text-level hit.
+                    mentions = bool(review_hit)
                     inserted = await self.database.insert_maps_comment(
                         topic_id=topic.id,
                         place_id=place.place_id,

@@ -95,7 +95,7 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 | `APIFY_POLL_INTERVAL_SECONDS` | `5` | Jeda polling status run |
 | `APIFY_POLL_TIMEOUT_SECONDS` | `600` | Batas waktu satu run |
 | `MAPS_MAX_PLACES_PER_SEARCH` | `3` | Cap tempat per kota pada POC |
-| `MAPS_MAX_REVIEWS_PER_PLACE` | `10` | Cap ulasan per tempat pada POC |
+| `MAPS_MAX_REVIEWS_PER_PLACE` | `10` | Cap ulasan terbaru yang tersedia per tempat; tidak dibatasi hanya 7 hari terakhir |
 | `GOOGLE_MAPS_API_KEY` | kosong | Disimpan untuk provider Places API langsung di tahap berikutnya |
 | `GOOGLE_MAPS_EMBED_KEY` | kosong | Key browser terpisah dan opsional |
 | `MAPS_DAILY_REQUEST_CAP` | `30` | Hard cap request Maps per hari |

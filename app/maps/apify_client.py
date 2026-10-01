@@ -153,8 +153,10 @@ class ApifyMapsClient:
                 5_000, max(1, self.settings.maps_max_places_per_search)
             ),
             "maxReviews": min(5_000, max(0, self.settings.maps_max_reviews_per_place)),
+            # Deliberately omit reviewsStartDate. maps_content_ttl_days controls
+            # our cache lifetime, not how old the newest available review may
+            # be; low-volume UMKM often have no review in a seven-day window.
             "reviewsSort": "newest",
-            "reviewsStartDate": f"{max(1, self.settings.maps_content_ttl_days)} days",
             "reviewsOrigin": "google",
             "language": self.settings.maps_language,
             "scrapePlaceDetailPage": True,

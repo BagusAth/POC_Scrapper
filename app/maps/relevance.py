@@ -16,7 +16,13 @@ def _signals(topic: Topic) -> list[str]:
 
 def _contains(text: str, signals: list[str]) -> bool:
     normalized = normalize(text)
-    return any(re.search(rf"(?<!\w){re.escape(signal)}(?!\w)", normalized) for signal in signals)
+    # Indonesian reviews frequently attach possessive/emphasis clitics to the
+    # product term ("cincaunya", "rasaku"). Treat those as the same word while
+    # retaining whole-phrase boundaries to avoid unrelated substring matches.
+    return any(
+        re.search(rf"(?<!\w){re.escape(signal)}(?:nya|ku|mu)?(?!\w)", normalized)
+        for signal in signals
+    )
 
 
 def mentions_product(text: str, topic: Topic) -> bool:
