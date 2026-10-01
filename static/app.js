@@ -6,6 +6,7 @@ const $ = (id) => document.getElementById(id);
 let stream;
 let topicRefreshTimer;
 let usageRefreshTimer;
+let trendRequestId = 0;
 
 async function refreshUsage() {
   try { state.usage = await api.usage(); renderUsage(); } catch { /* live usage is supplementary to the dashboard */ }
@@ -18,13 +19,18 @@ async function loadTopics(preferredId = "") {
   renderTopics(); return state.activeTopicId;
 }
 async function refreshTrend({ quiet = false } = {}) {
-  if (!state.activeTopicId) { state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null; renderMetrics(); renderVideos(); renderMaps(); renderSocial(); return; }
+  const requestId = ++trendRequestId;
+  const topicId = state.activeTopicId;
+  const videoSort = state.videoSort;
+  const videoType = state.videoType;
+  if (!topicId) { state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null; renderMetrics(); renderVideos(); renderMaps(); renderSocial(); return; }
   if (!quiet) renderLoading(true);
   try {
-    const [metrics, videoPayload, placesPayload, feedPayload, socialPayload, socialStats] = await Promise.all([api.trend(state.activeTopicId), api.videos(state.activeTopicId, state.videoSort, state.videoType), api.mapsPlaces(state.activeTopicId), api.mapsFeed(state.activeTopicId), api.socialFeed(state.activeTopicId), api.socialStats(state.activeTopicId)]);
+    const [metrics, videoPayload, placesPayload, feedPayload, socialPayload, socialStats] = await Promise.all([api.trend(topicId), api.videos(topicId, videoSort, videoType), api.mapsPlaces(topicId), api.mapsFeed(topicId), api.socialFeed(topicId), api.socialStats(topicId)]);
+    if (requestId !== trendRequestId || topicId !== state.activeTopicId) return;
     state.metrics = metrics; state.videos = videoPayload.items || []; state.mapsPlaces = placesPayload.items || []; state.mapsFeed = feedPayload.items || []; state.socialPosts = socialPayload.items || []; state.socialStats = socialStats; renderMetrics(); renderVideos(); renderMaps(); renderSocial();
-  } catch (error) { showToast(`Tren belum dapat dimuat: ${error.message}`); }
-  finally { renderLoading(false); }
+  } catch (error) { if (requestId === trendRequestId) showToast(`Tren belum dapat dimuat: ${error.message}`); }
+  finally { if (requestId === trendRequestId) renderLoading(false); }
 }
 async function selectTopic(id) {
   if (!id || id === state.activeTopicId) return;
