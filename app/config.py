@@ -64,11 +64,12 @@ class Settings(BaseSettings):
     social_daily_run_cap: int = 12
     social_monthly_run_cap: int = 300
     social_comments_enabled: bool = False
+    social_sentiment_enabled: bool = True
 
     demo_mode: bool = False
     demo_stats_interval_seconds: float = 120.0
     demo_budget_units: int = 1_500
-    max_active_topics: int = 5
+    max_active_topics: int = 20
 
     ai_mode: Literal["mock", "lexicon", "gemini"] = "mock"
     gemini_api_key: str = ""

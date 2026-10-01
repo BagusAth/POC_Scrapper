@@ -56,6 +56,9 @@ def create_health_router(
             "instagram_configured": bool(
                 settings.apify_token and "instagram" in sources
             ),
+            "max_active_topics": settings.max_active_topics,
+            "social_sentiment_enabled": settings.social_sentiment_enabled,
+            "social_sentiment_analyzer": analyzer.get("active_analyzer", settings.ai_mode),
             "yt_comments_enabled": settings.yt_comments_enabled,
             "demo_mode": settings.demo_mode,
             "analyzer": analyzer,

@@ -12,6 +12,7 @@ from app.models import Topic
 
 from .apify_client import Platform, SocialApifyClient
 from .parsing import parse_social_items
+from .sentiment import SocialSentimentService
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +21,18 @@ class SocialCollector:
     def __init__(
         self, database: Database, client: SocialApifyClient,
         settings: Settings, broker: EventBroker,
+        sentiment: SocialSentimentService | None = None,
     ) -> None:
         self.database = database
         self.client = client
         self.settings = settings
         self.broker = broker
+        self.sentiment = sentiment
+
+    async def analyze_pending(self, topic_id: str) -> dict[str, int | str]:
+        if self.sentiment is None:
+            return {"analyzed": 0, "pending": 0, "analyzer": "disabled"}
+        return await self.sentiment.analyze_topic(topic_id)
 
     async def refresh_topic(self, topic: Topic, *, now: datetime | None = None) -> dict[str, int]:
         captured_at = now or datetime.now(timezone.utc)
@@ -73,6 +81,10 @@ class SocialCollector:
                         "views": post.views,
                     })
             await self.database.update_social_refresh(topic.id, platform, collection.collected_at)
+
+        # Analyze one bounded batch immediately; the scheduler drains remaining
+        # pending captions without spending another Apify run.
+        await self.analyze_pending(topic.id)
 
         if completed == 0 and errors:
             raise errors[-1]

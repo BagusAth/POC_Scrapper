@@ -175,6 +175,50 @@ class AnalyzerWorker(WorkerIO):
         await self._publish_status_if_changed()
         return results
 
+    async def analyze_texts(self, items: list[tuple[str, str]]) -> list[SentimentResult]:
+        """Analyze non-comment text (for example social captions) with the same fallback policy."""
+        if not items:
+            return []
+        # Mock mode is useful for legacy comment fixtures, but social trend
+        # sentiment must remain meaningful even when no Gemini key is set.
+        selected = self.fallback if self.ai_mode == "mock" else self.analyzer
+        failed = False
+        if self.ai_mode == "gemini":
+            now = datetime.now(timezone.utc)
+            if (
+                selected.name != "gemini"
+                or self.gemini_failures >= self.max_failures
+                or (self.cooldown_until and now < self.cooldown_until)
+            ):
+                selected = self.fallback
+            else:
+                await self.limiter.acquire()
+        try:
+            results = await selected.analyze(items)
+            if selected.name == "gemini":
+                self.gemini_failures = 0
+                self.gemini_healthy = True
+                self.cooldown_until = None
+                self.last_error = None
+        except RateLimitedError as exc:
+            failed = True
+            self._gemini_failed(exc, rate_limited=True)
+            results = []
+        except Exception as exc:
+            failed = True
+            if self.ai_mode == "gemini" and selected.name == "gemini":
+                self._gemini_failed(exc, rate_limited=False)
+            else:
+                self.last_error = str(exc)
+            results = []
+        if failed and self.ai_mode == "gemini" and self.gemini_failures >= self.max_failures:
+            selected = self.fallback
+            results = await selected.analyze(items)
+        if not failed or results:
+            self.active_analyzer = selected.name
+        await self._publish_status_if_changed()
+        return results
+
     def _gemini_failed(self, exc: Exception, *, rate_limited: bool) -> None:
         self.gemini_failures += 1
         self.gemini_healthy = False

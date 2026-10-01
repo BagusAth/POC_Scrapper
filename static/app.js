@@ -1,10 +1,15 @@
 import { api } from "./api.js";
 import { state } from "./state.js";
-import { renderHealth, renderLoading, renderMaps, renderMetrics, renderSocial, renderTopics, renderVideos, setConnection, showBanner, showToast } from "./ui.js";
+import { renderHealth, renderLoading, renderMaps, renderMetrics, renderSocial, renderTopics, renderUsage, renderVideos, setConnection, showBanner, showToast } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 let stream;
 let topicRefreshTimer;
+let usageRefreshTimer;
+
+async function refreshUsage() {
+  try { state.usage = await api.usage(); renderUsage(); } catch { /* live usage is supplementary to the dashboard */ }
+}
 
 async function loadTopics(preferredId = "") {
   const payload = await api.topics(); state.topics = payload.items || [];
@@ -61,6 +66,7 @@ function connectStream() {
   stream.onerror = () => { state.streamConnected = false; setConnection(false); };
   stream.addEventListener("trend_tick", (event) => { const tick = JSON.parse(event.data); if (tick.topic_id !== state.activeTopicId) return; $("live-ticker").textContent = `+${new Intl.NumberFormat("id-ID").format(tick.views_gain_since_last || 0)} sejak snapshot`; refreshTrend({ quiet: true }); });
   stream.addEventListener("topic_status", async (event) => { const update = JSON.parse(event.data); await loadTopics(update.topic_id === state.activeTopicId ? update.topic_id : ""); if (update.topic_id === state.activeTopicId) { showBanner(update.status, update.message); await refreshTrend({ quiet: true }); } });
+  stream.addEventListener("social_sentiment_updated", async (event) => { const update = JSON.parse(event.data); if (update.topic_id === state.activeTopicId) await refreshTrend({ quiet: true }); else await loadTopics(); });
 }
 function bindControls() {
   $("topic-tabs").addEventListener("click", (event) => { const button = event.target.closest("button[data-topic-id]"); if (button) selectTopic(button.dataset.topicId); });
@@ -72,7 +78,7 @@ function bindControls() {
 }
 async function init() {
   bindControls();
-  try { const [health, usage] = await Promise.all([api.health(), api.usage()]); state.health = health; state.usage = usage; renderHealth(); await loadTopics(); await refreshTrend(); }
+  try { const [health, usage] = await Promise.all([api.health(), api.usage()]); state.health = health; state.usage = usage; renderHealth(); renderUsage(); await loadTopics(); await refreshTrend(); usageRefreshTimer = window.setInterval(refreshUsage, 30000); }
   catch (error) { showToast(`Aplikasi belum siap: ${error.message}`); }
   connectStream();
 }

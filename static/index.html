@@ -21,12 +21,13 @@
       </div>
       <div class="header-actions">
         <div id="source-status" class="source-status" aria-label="Status sumber data"></div>
+        <div id="apify-usage" class="apify-usage" aria-live="polite" title="Kuota Actor Apify harian dan bulanan"></div>
         <div id="connection-status" class="live-pill is-connecting" role="status" aria-live="polite"><span class="live-dot"></span><span class="connection-label">Menyambung…</span></div>
       </div>
     </header>
 
     <section class="watchlist" aria-labelledby="watchlist-title">
-      <div><p id="watchlist-title" class="section-label">Produk yang dipantau</p><div id="topic-tabs" class="topic-tabs" role="tablist" aria-label="Pilih produk"></div></div>
+      <div><p id="watchlist-title" class="section-label">Produk yang dipantau <span id="topic-cap-note" class="topic-cap-note"></span></p><div id="topic-tabs" class="topic-tabs" role="tablist" aria-label="Pilih produk"></div></div>
       <button id="add-topic-button" class="button button-primary" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>Pantau produk</button>
     </section>
     <div id="topic-banner" class="topic-banner" role="status" aria-live="polite" hidden></div>
@@ -85,6 +86,15 @@
 
       <section class="panel social-panel" aria-labelledby="social-panel-title">
         <div class="panel-heading"><div><p class="panel-label">TikTok · Instagram</p><h3 id="social-panel-title">Post produk yang sedang ramai</h3><p id="social-panel-note" class="panel-note">Caption disaring lokal berdasarkan istilah produk; media tidak diunduh.</p></div><span id="social-count-badge" class="ticker">0 post</span></div>
+        <div class="social-insights">
+          <div class="social-sentiment-summary" aria-label="Ringkasan sentimen sosial">
+            <div class="social-sentiment-card is-positive"><span>Positif</span><strong id="social-positive-count">0</strong><small id="social-positive-rate">0%</small></div>
+            <div class="social-sentiment-card is-negative"><span>Negatif</span><strong id="social-negative-count">0</strong><small id="social-negative-rate">0%</small></div>
+            <div class="social-sentiment-card is-neutral"><span>Netral / pending</span><strong id="social-neutral-count">0</strong><small id="social-dominant-sentiment">Belum dianalisis</small></div>
+          </div>
+          <div class="social-trend-wrap"><div class="social-subheading"><h4>Trend sentimen harian</h4><span id="social-analyzer-note">Analyzer belum aktif</span></div><div class="social-chart-box"><canvas id="social-sentiment-chart" aria-label="Trend sentimen sosial harian"></canvas><div id="social-trend-empty" class="chart-empty">Belum ada hasil sentimen sosial</div></div></div>
+          <div class="social-topics-wrap"><h4 class="social-subheading-title">Aspek yang sering disebut</h4><ul id="social-topic-trend-list" class="social-topic-trend-list"></ul></div>
+        </div>
         <div id="social-feed-list" class="social-feed-list"></div>
         <div id="social-empty" class="table-empty" hidden><strong>Belum ada post sosial</strong><span>Isi APIFY_TOKEN lalu tunggu refresh topik.</span></div>
         <p id="social-source-note" class="data-footer">Sumber: TikTok &amp; Instagram melalui Apify · belum ada data</p>

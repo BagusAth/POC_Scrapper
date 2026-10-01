@@ -37,6 +37,7 @@ from app.maps.collector import MapsCollector
 from app.social.usage import SocialUsageTracker
 from app.social.apify_client import SocialApifyClient
 from app.social.collector import SocialCollector
+from app.social.sentiment import SocialSentimentService
 from app.products import ProductCatalog
 from app.topics.service import TopicService
 from app.youtube.client import PublicYouTubeClient, YouTubeClient
@@ -91,12 +92,19 @@ def create_app(
         maps_collector = MapsCollector(database, maps_client, runtime, broker)
     social_client: SocialApifyClient | None = None
     social_collector: SocialCollector | None = None
+    social_sentiment = SocialSentimentService(
+        database, worker, broker,
+        enabled=runtime.social_sentiment_enabled,
+        batch_size=runtime.batch_size,
+    )
     if (
         runtime.apify_token
         and {"tiktok", "instagram"}.intersection(runtime.active_sources)
     ):
         social_client = SocialApifyClient(runtime, social_usage)
-        social_collector = SocialCollector(database, social_client, runtime, broker)
+        social_collector = SocialCollector(
+            database, social_client, runtime, broker, social_sentiment
+        )
     youtube_client: YouTubeClient | PublicYouTubeClient | None = None
     if "youtube_trend" in runtime.active_sources:
         youtube_client = (
@@ -160,6 +168,7 @@ def create_app(
         application.state.maps_collector = maps_collector
         application.state.social_client = social_client
         application.state.social_collector = social_collector
+        application.state.social_sentiment = social_sentiment
         application.state.analyzer_worker = worker
         try:
             yield

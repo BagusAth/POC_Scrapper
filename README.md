@@ -34,6 +34,7 @@ Dashboard tidak memakai data demo untuk Panel A.
 - Jika `APIFY_TOKEN` diisi, server menjalankan Actor `compass~crawler-google-places`, menunggu status `SUCCEEDED`, lalu mengambil dataset ulasan terbaru. Hasilnya difilter berdasarkan nama/kata produk sebelum masuk feed opini.
 - Jika token kosong, tidak ada data Maps/TikTok/Instagram sintetis yang dibuat; health API menampilkan sumber Apify belum dikonfigurasi.
 - TikTok dan Instagram dikumpulkan dalam satu Actor run per platform/topik. Maksimal tiga keyword/hashtag digabung, sampai 50 post per query, lalu filter umur dan relevansi dilakukan lokal. Download video, thumbnail, avatar, transkripsi, AI description, dan crawl komentar dimatikan default.
+- Caption sosial yang lolos relevansi dianalisis menjadi positif, negatif, atau netral memakai analyzer Gemini yang dikonfigurasi dan fallback leksikon lokal. Statistik harian, aspek dominan, dan label per post ditampilkan di dashboard.
 
 Uji satu kata produk tanpa mengubah database utama:
 
@@ -86,7 +87,8 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 | `SOCIAL_DAILY_RUN_CAP` | `12` | Cap Actor run sosial per hari |
 | `SOCIAL_MONTHLY_RUN_CAP` | `300` | Cap Actor run sosial per bulan |
 | `SOCIAL_COMMENTS_ENABLED` | `false` | Komentar sengaja nonaktif untuk efisiensi |
-| `MAX_ACTIVE_TOPICS` | `5` | Batas topik aktif |
+| `SOCIAL_SENTIMENT_ENABLED` | `true` | Analisis sentimen caption sosial yang relevan |
+| `MAX_ACTIVE_TOPICS` | `20` | Batas topik aktif |
 | `DATABASE_PATH` | `data/app.db` | SQLite lokal |
 
 Saat `VIDEO_CLASSIFIER=auto` dan `GEMINI_API_KEY` tersedia, maksimal 50 judul diklasifikasikan per request menjadi `review`, `resep`, `ide_usaha`, atau `lainnya`. Judul diperlakukan sebagai data, request melewati rate limiter bersama, dan kegagalan selalu jatuh ke aturan lokal.
@@ -133,7 +135,7 @@ Snapshot tidak diubah setelah ditulis. Event `trend_tick` dikirim lewat Server-S
 - `GET /api/maps/places?topic_id=...` — tempat relevan dan snapshot rating dari koleksi Apify.
 - `GET /api/maps/feed?topic_id=...` — opini Maps yang lolos filter produk.
 - `GET /api/social/feed?topic_id=...&platform=tiktok|instagram` — post publik yang caption-nya relevan.
-- `GET /api/social/stats?topic_id=...` — jumlah post dan agregat engagement per platform.
+- `GET /api/social/stats?topic_id=...` — jumlah post, agregat engagement, distribusi sentiment, aspek, dan trend harian.
 - `GET /api/stream` — `trend_tick`, `topic_status`, dan keep-alive.
 - `GET /docs` — dokumentasi OpenAPI interaktif.
 

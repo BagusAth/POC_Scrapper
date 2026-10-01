@@ -134,6 +134,12 @@ CREATE TABLE IF NOT EXISTS social_posts (
     likes INTEGER,
     comments INTEGER,
     shares INTEGER,
+    sentiment TEXT,
+    sentiment_score REAL,
+    sentiment_topics TEXT NOT NULL DEFAULT '[]',
+    sentiment_analyzer TEXT,
+    sentiment_status TEXT NOT NULL DEFAULT 'pending',
+    sentiment_attempts INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (platform, post_id, topic_id)
 );
 CREATE INDEX IF NOT EXISTS idx_social_posts_topic ON social_posts(topic_id, published_at DESC);
@@ -230,8 +236,32 @@ class Database:
         await connection.execute("PRAGMA busy_timeout=5000")
         await connection.execute("PRAGMA foreign_keys=ON")
         await connection.executescript(SCHEMA)
+        await self._migrate_social_sentiment(connection)
         await connection.commit()
         self._connection = connection
+
+    @staticmethod
+    async def _migrate_social_sentiment(connection: aiosqlite.Connection) -> None:
+        """Add social sentiment fields to databases created before the social analyzer."""
+        cursor = await connection.execute("PRAGMA table_info(social_posts)")
+        columns = {str(row[1]) for row in await cursor.fetchall()}
+        migrations = (
+            ("sentiment", "TEXT"),
+            ("sentiment_score", "REAL"),
+            ("sentiment_topics", "TEXT NOT NULL DEFAULT '[]'"),
+            ("sentiment_analyzer", "TEXT"),
+            ("sentiment_status", "TEXT NOT NULL DEFAULT 'pending'"),
+            ("sentiment_attempts", "INTEGER NOT NULL DEFAULT 0"),
+        )
+        for name, definition in migrations:
+            if name not in columns:
+                await connection.execute(
+                    f"ALTER TABLE social_posts ADD COLUMN {name} {definition}"
+                )
+        await connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_social_posts_sentiment "
+            "ON social_posts(topic_id, sentiment_status, published_at DESC)"
+        )
 
     async def initialize(self) -> None:
         await self.init()
@@ -502,6 +532,52 @@ class Database:
         row = await cursor.fetchone()
         return from_iso(row[0]) if row else None
 
+    async def list_pending_social_posts(
+        self, topic_id: str | None = None, *, limit: int = 25
+    ) -> list[dict[str, Any]]:
+        clauses = ["mentions_product=1", "COALESCE(sentiment_status, 'pending')='pending'"]
+        params: list[Any] = []
+        if topic_id:
+            clauses.append("topic_id=?")
+            params.append(topic_id)
+        params.append(min(max(limit, 1), 200))
+        cursor = await self._conn().execute(
+            f"""SELECT * FROM social_posts WHERE {' AND '.join(clauses)}
+                ORDER BY published_at ASC, post_id ASC LIMIT ?""",
+            params,
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+    async def update_social_sentiment(
+        self, *, platform: str, post_id: str, topic_id: str,
+        sentiment: str, score: float, topics: list[str], analyzer: str,
+    ) -> None:
+        await self._conn().execute(
+            """UPDATE social_posts
+               SET sentiment=?, sentiment_score=?, sentiment_topics=?,
+                   sentiment_analyzer=?, sentiment_status='analyzed',
+                   sentiment_attempts=sentiment_attempts+1
+               WHERE platform=? AND post_id=? AND topic_id=?""",
+            (
+                sentiment, max(-1.0, min(1.0, float(score))), json.dumps(topics),
+                analyzer, platform, post_id, topic_id,
+            ),
+        )
+        await self._conn().commit()
+
+    async def mark_social_sentiment_attempt(
+        self, *, platform: str, post_id: str, topic_id: str, failed: bool = False
+    ) -> None:
+        await self._conn().execute(
+            """UPDATE social_posts
+               SET sentiment_attempts=sentiment_attempts+1,
+                   sentiment_status=CASE WHEN ? AND sentiment_attempts+1 >= 3
+                       THEN 'failed' ELSE COALESCE(sentiment_status, 'pending') END
+               WHERE platform=? AND post_id=? AND topic_id=?""",
+            (int(failed), platform, post_id, topic_id),
+        )
+        await self._conn().commit()
+
     async def list_social_posts(
         self, topic_id: str, *, platform: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
@@ -515,18 +591,73 @@ class Database:
                 ORDER BY published_at DESC,post_id DESC LIMIT ?""",
             params,
         )
-        return [dict(row) for row in await cursor.fetchall()]
+        rows = []
+        for row in await cursor.fetchall():
+            item = dict(row)
+            item["sentiment_topics"] = _loads(item.get("sentiment_topics"))
+            rows.append(item)
+        return rows
 
     async def social_stats(self, topic_id: str) -> dict[str, Any]:
         cursor = await self._conn().execute(
-            """SELECT platform,COUNT(*) AS posts,COALESCE(SUM(views),0) AS views,
-                      COALESCE(SUM(likes),0) AS likes,COALESCE(SUM(comments),0) AS comments,
-                      COALESCE(SUM(shares),0) AS shares
-               FROM social_posts WHERE topic_id=? AND mentions_product=1 GROUP BY platform""",
+            """SELECT platform,post_id,published_at,views,likes,comments,shares,
+                      sentiment,sentiment_score,sentiment_topics
+               FROM social_posts WHERE topic_id=? AND mentions_product=1
+               ORDER BY published_at ASC,post_id ASC""",
             (topic_id,),
         )
-        rows = [dict(row) for row in await cursor.fetchall()]
-        return {"platforms": rows, "total_posts": sum(int(row["posts"]) for row in rows)}
+        platform_data: dict[str, dict[str, Any]] = {}
+        sentiment = {"positif": 0, "negatif": 0, "netral": 0, "pending": 0}
+        daily: dict[str, dict[str, int | str]] = {}
+        topic_data: dict[str, dict[str, int | str]] = {}
+        score_total = 0.0
+        score_count = 0
+        for raw in await cursor.fetchall():
+            row = dict(raw)
+            platform = str(row["platform"])
+            item = platform_data.setdefault(platform, {
+                "platform": platform, "posts": 0, "views": 0, "likes": 0,
+                "comments": 0, "shares": 0,
+                "sentiment": {"positif": 0, "negatif": 0, "netral": 0, "pending": 0},
+            })
+            item["posts"] += 1
+            for metric in ("views", "likes", "comments", "shares"):
+                item[metric] += int(row[metric] or 0)
+            label = str(row["sentiment"] or "pending")
+            if label not in sentiment:
+                label = "pending"
+            sentiment[label] += 1
+            item["sentiment"][label] += 1
+            score = row["sentiment_score"]
+            if score is not None:
+                score_total += float(score)
+                score_count += 1
+            day = str(row["published_at"] or "")[:10] or "unknown"
+            point = daily.setdefault(day, {"date": day, "positif": 0, "negatif": 0, "netral": 0, "pending": 0})
+            point[label] += 1
+            for topic in _loads(row.get("sentiment_topics")):
+                topic_item = topic_data.setdefault(topic, {"topic": topic, "total": 0, "positif": 0, "negatif": 0, "netral": 0})
+                topic_item["total"] += 1
+                if label in ("positif", "negatif", "netral"):
+                    topic_item[label] += 1
+        analyzed = sentiment["positif"] + sentiment["negatif"] + sentiment["netral"]
+        dominant = max(("positif", "negatif", "netral"), key=lambda key: sentiment[key]) if analyzed else "pending"
+        positive_rate = sentiment["positif"] / analyzed if analyzed else 0.0
+        negative_rate = sentiment["negatif"] / analyzed if analyzed else 0.0
+        daily_values = sorted(daily.values(), key=lambda row: str(row["date"]))[-30:]
+        return {
+            "platforms": list(platform_data.values()),
+            "total_posts": sum(int(row["posts"]) for row in platform_data.values()),
+            "sentiment": sentiment,
+            "analyzed_posts": analyzed,
+            "pending_posts": sentiment["pending"],
+            "positive_rate": round(positive_rate, 4),
+            "negative_rate": round(negative_rate, 4),
+            "net_score": round(score_total / score_count, 4) if score_count else None,
+            "dominant_sentiment": dominant,
+            "top_topics": sorted(topic_data.values(), key=lambda row: int(row["total"]), reverse=True)[:8],
+            "daily": daily_values,
+        }
 
     async def deactivate_topic(self, topic_id: str) -> bool:
         cursor = await self._conn().execute(

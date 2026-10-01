@@ -8,9 +8,12 @@ import pytest
 
 from app.config import Settings
 from app.db import Database
-from app.models import Topic
+from app.events import EventBroker
+from app.models import Topic, TopicCreate
+from app.analyzer.worker import AnalyzerWorker
 from app.social.apify_client import SocialApifyClient
 from app.social.parsing import parse_social_items
+from app.social.sentiment import SocialSentimentService
 from app.social.usage import SocialUsageTracker
 
 
@@ -81,3 +84,35 @@ def test_instagram_input_and_social_parser() -> None:
     assert posts[0].url == "https://www.instagram.com/p/ABC/"
     assert posts[0].mentions_product is True
     assert posts[0].likes == 23
+
+
+@pytest.mark.asyncio
+async def test_social_sentiment_is_persisted_and_aggregated(tmp_path: Path) -> None:
+    db = Database(tmp_path / "social-sentiment.db")
+    await db.init()
+    topic_row = await db.create_topic(TopicCreate(
+        name="Sepatu Lokal", keywords=["sepatu lokal"],
+        product_terms=["sepatu"], exclude_terms=[], category="fashion", cities=["Bandung"],
+    ))
+    now = topic_row.created_at
+    for platform, post_id, text in (
+        ("tiktok", "tt-positive", "Sepatu lokal bagus dan nyaman"),
+        ("instagram", "ig-negative", "Sepatu ini mahal dan mengecewakan"),
+    ):
+        await db.upsert_social_post(
+            platform=platform, post_id=post_id, topic_id=topic_row.id,
+            text=text, author_name="akun", author_url=None, url=None,
+            published_at=now, seen_at=now, query="sepatu lokal", mentions_product=True,
+            views=10, likes=2, comments=1, shares=0,
+        )
+    settings = Settings(_env_file=None, ai_mode="lexicon", database_path=tmp_path / "social-sentiment.db")
+    worker = AnalyzerWorker(settings, db, EventBroker())
+    service = SocialSentimentService(db, worker, EventBroker(), batch_size=10)
+    result = await service.analyze_topic(topic_row.id)
+    assert result["analyzed"] == 2
+    stats = await db.social_stats(topic_row.id)
+    assert stats["sentiment"] == {"positif": 1, "negatif": 1, "netral": 0, "pending": 0}
+    assert stats["dominant_sentiment"] in {"positif", "negatif"}
+    posts = await db.list_social_posts(topic_row.id)
+    assert {post["sentiment"] for post in posts} == {"positif", "negatif"}
+    await db.close()

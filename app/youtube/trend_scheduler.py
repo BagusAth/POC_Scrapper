@@ -108,7 +108,13 @@ class TrendScheduler:
     async def run(self) -> None:
         while not self._stop.is_set():
             now = datetime.now(timezone.utc)
-            for topic in await self.database.list_topics():
+            topics = await self.database.list_topics()
+            for topic in topics:
+                if self.social_collector:
+                    try:
+                        await self.social_collector.analyze_pending(topic.id)
+                    except Exception:
+                        logger.exception("Analisis sentimen sosial gagal untuk %s", topic.id)
                 yt_stale = (
                     topic.yt_last_discovery_at is None
                     or topic.yt_last_discovery_at <= now - timedelta(hours=self.settings.yt_search_refresh_hours)

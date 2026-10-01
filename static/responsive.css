@@ -3,6 +3,7 @@
   .mix-panel { grid-column: 1 / -1; }
   .mix-layout { grid-template-columns: 180px minmax(220px, 420px); justify-content: center; align-items: center; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .social-insights { grid-template-columns: 1fr 1fr; }.social-sentiment-summary { grid-column: 1 / -1; }
 }
 @media (max-width: 900px) {
   .app-shell { width: min(100% - 30px, 760px); padding-top: 24px; }
@@ -13,6 +14,7 @@
   .hero-meta { width: 100%; grid-template-columns: auto 1fr; align-items: center; justify-items: start; }.hero-meta > p { justify-self: end; }
   .charts-grid { grid-template-columns: 1fr; }.mix-panel { grid-column: auto; }.mix-layout { grid-template-columns: 170px minmax(190px, 1fr); }
   .video-heading { align-items: flex-start; flex-direction: column; }.video-controls { width: 100%; justify-content: space-between; }
+  .social-insights { grid-template-columns: 1fr; }.social-sentiment-summary { grid-column: auto; }
 }
 @media (max-width: 650px) {
   .app-shell { width: calc(100% - 22px); padding: 18px 0 34px; }
@@ -28,7 +30,7 @@
   .table-scroller { margin-top: 14px; } th, td { padding: 11px 9px; }.video-title { max-width: 245px; }
   .maps-preview { grid-template-columns: auto 1fr; margin: 0 13px 13px; padding: 17px; }.maps-preview > .source-chip { grid-column: 1 / -1; justify-self: start; }
   .maps-panel { margin: 0 13px 13px; padding: 18px 10px 10px; }.maps-panel > .panel-heading { padding: 0 8px; }.maps-data-grid { grid-template-columns: 1fr; gap: 18px; }.maps-subtitle { padding: 0 8px; }
-  .social-panel { margin: 0 13px 13px; padding: 18px 10px 10px; }.social-panel > .panel-heading { padding: 0 8px; }.social-feed-list { grid-template-columns: 1fr; }
+  .social-panel { margin: 0 13px 13px; padding: 18px 10px 10px; }.social-panel > .panel-heading { padding: 0 8px; }.social-feed-list { grid-template-columns: 1fr; }.social-insights { margin: 14px 8px 0; }.social-sentiment-summary { gap: 5px; }.social-sentiment-card { padding: 9px; }.social-sentiment-card strong { font-size: 19px; }
   .topic-dialog form { padding: 21px; }.dialog-heading h2 { font-size: 21px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition-duration: .001ms !important; } }

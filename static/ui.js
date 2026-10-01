@@ -24,17 +24,32 @@ export function setConnection(connected) {
   element.querySelector(".connection-label").textContent = connected ? "LIVE" : "Menyambung…";
 }
 export function renderHealth() {
-  const health = state.health || {}; const youtube = health.youtube_mode === "api" ? "YouTube API" : "YouTube publik"; const mapsActive = Boolean(health.maps_configured);
+  const health = state.health || {}; const sources = health.sources_active || []; const youtube = health.youtube_mode === "api" ? "YouTube API" : "YouTube publik"; const mapsActive = Boolean(health.maps_configured);
   const tiktokActive = Boolean(health.tiktok_configured); const instagramActive = Boolean(health.instagram_configured);
-  $("source-status").innerHTML = `<span class="source-chip is-on"><i></i>${youtube}</span><span class="source-chip ${mapsActive ? "is-on" : "is-off"}"><i></i>Google Maps</span>${health.sources_active?.includes("tiktok") ? `<span class="source-chip ${tiktokActive ? "is-on" : "is-off"}"><i></i>TikTok</span>` : ""}${health.sources_active?.includes("instagram") ? `<span class="source-chip ${instagramActive ? "is-on" : "is-off"}"><i></i>Instagram</span>` : ""}`;
+  $("source-status").innerHTML = `${sources.includes("youtube_trend") ? `<span class="source-chip is-on"><i></i>${youtube}</span>` : ""}${sources.includes("maps") ? `<span class="source-chip ${mapsActive ? "is-on" : "is-off"}"><i></i>Google Maps</span>` : ""}${sources.includes("tiktok") ? `<span class="source-chip ${tiktokActive ? "is-on" : "is-off"}"><i></i>TikTok</span>` : ""}${sources.includes("instagram") ? `<span class="source-chip ${instagramActive ? "is-on" : "is-off"}"><i></i>Instagram</span>` : ""}`;
   $("maps-status-badge").className = `source-chip ${mapsActive ? "is-on" : "is-off"}`; $("maps-status-badge").textContent = mapsActive ? `${health.maps_provider === "apify" ? "Apify aktif" : "Places aktif"}` : "Belum dikonfigurasi";
   $("maps-status-copy").textContent = mapsActive ? "Server menjalankan pencarian tempat dan ulasan terbaru melalui Apify." : "Isi APIFY_TOKEN di .env server untuk mengaktifkan pencarian tempat dan ulasan.";
+}
+export function renderUsage() {
+  const element = $("apify-usage"); if (!element) return;
+  const health = state.health || {}; const social = state.usage?.social;
+  if (!health.apify_configured) {
+    element.className = "apify-usage is-off"; element.innerHTML = "<strong>Apify belum aktif</strong><span>Token server belum siap</span>"; return;
+  }
+  if (!social) {
+    const maps = state.usage?.maps || {}; element.className = "apify-usage";
+    element.innerHTML = `<strong>Apify token aktif</strong><span>Maps ${Number(maps.today || 0)}/${Number(maps.daily_limit || 0)} request hari ini</span>`; return;
+  }
+  const daily = Number(social.today || 0); const dailyLimit = Number(social.daily_limit || 0); const monthly = Number(social.this_month || 0); const monthlyLimit = Number(social.monthly_limit || 0);
+  const ratio = dailyLimit ? daily / dailyLimit : 0; element.className = `apify-usage ${ratio >= .85 ? "is-warning" : ""}`;
+  element.innerHTML = `<strong>Apify ${daily}/${dailyLimit} run hari ini</strong><span>${monthly}/${monthlyLimit} bulan · ${health.social_sentiment_enabled ? "sentiment aktif" : "sentiment off"}</span>`;
 }
 export function renderTopics() {
   $("topic-tabs").innerHTML = state.topics.length ? state.topics.map((topic) => {
     const selected = topic.id === state.activeTopicId; const count = Number(topic.videos_tracked || 0);
     return `<button type="button" role="tab" aria-selected="${selected}" class="topic-tab ${selected ? "active" : ""}" data-topic-id="${escapeHtml(topic.id)}"><span>${escapeHtml(topic.name)}</span><small>${count ? `${count} video` : topic.status === "discovering" ? "mencari…" : "belum ada"}</small></button>`;
   }).join("") : '<p class="watchlist-empty">Belum ada produk. Tambahkan produk pertama untuk mulai mencari tren.</p>';
+  const cap = Number(state.health?.max_active_topics || 20); $("topic-cap-note").textContent = `${state.topics.length}/${cap} aktif`;
   const topic = state.topics.find((item) => item.id === state.activeTopicId);
   $("topic-title").textContent = topic ? `Apa yang terjadi pada “${topic.name}”?` : "Pilih produk untuk melihat tren";
   $("topic-subtitle").textContent = topic ? `Sinyal dihitung hanya dari video yang menyebut produk terkait · target ${topic.cities.join(", ")}` : "Tambahkan produk UMKM untuk memulai pemantauan YouTube secara live.";
@@ -102,16 +117,35 @@ export function renderMaps() {
   $("maps-feed-list").innerHTML = feed.map((item) => `<article class="maps-feed-item"><div class="maps-feed-meta"><span class="maps-feed-stars">${item.stars == null ? "☆" : `${"★".repeat(Math.max(0, Math.min(5, Number(item.stars))))}${"☆".repeat(Math.max(0, 5 - Number(item.stars)))}`}</span><time>${item.created_at ? date.format(new Date(item.created_at)) : "Baru"}</time></div><p class="maps-feed-text">${escapeHtml(item.text)}</p><p class="maps-feed-place">${escapeHtml(placeNames[item.place_id] || "Google Maps")}</p></article>`).join("");
   $("maps-source-note").textContent = `Sumber: Google Maps melalui Apify · ${feed.length} opini tersimpan · ulasan difilter berdasarkan kata produk`;
 }
+function renderSocialTrend(daily) {
+  const items = (daily || []).filter((item) => item.date && (item.positif || item.negatif || item.netral));
+  const empty = $("social-trend-empty"); const canvas = $("social-sentiment-chart"); const hasData = items.length > 0;
+  empty.hidden = hasData; canvas.hidden = !hasData;
+  if (!hasData) { state.charts["social-sentiment-chart"]?.destroy(); return; }
+  chart("social-sentiment-chart", { type: "line", data: { labels: items.map((item) => new Date(`${item.date}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short" })), datasets: [
+    { label: "Positif", data: items.map((item) => item.positif || 0), borderColor: "#42c879", backgroundColor: "rgba(66,200,121,.12)", fill: true, tension: .35, pointRadius: 2, borderWidth: 2 },
+    { label: "Negatif", data: items.map((item) => item.negatif || 0), borderColor: "#bd5343", backgroundColor: "rgba(189,83,67,.08)", fill: true, tension: .35, pointRadius: 2, borderWidth: 2 },
+    { label: "Netral", data: items.map((item) => item.netral || 0), borderColor: "#8b9690", backgroundColor: "transparent", fill: false, tension: .35, pointRadius: 2, borderWidth: 1.5 },
+  ] }, options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: false } }, scales: { ...chartDefaults.scales, x: { ...chartDefaults.scales.x, maxTicksLimit: 5 }, y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, precision: 0 } } } } });
+}
 export function renderSocial() {
   const posts = state.socialPosts || [];
+  const stats = state.socialStats || {}; const sentiment = stats.sentiment || {}; const positive = Number(sentiment.positif || 0); const negative = Number(sentiment.negatif || 0); const neutral = Number(sentiment.netral || 0); const pending = Number(sentiment.pending || 0); const analyzed = Number(stats.analyzed_posts || positive + negative + neutral);
   $("social-count-badge").textContent = `${posts.length} post`;
+  $("social-positive-count").textContent = fullNumber.format(positive); $("social-negative-count").textContent = fullNumber.format(negative); $("social-neutral-count").textContent = fullNumber.format(neutral + pending);
+  $("social-positive-rate").textContent = `${Math.round(Number(stats.positive_rate || 0) * 100)}% dari dianalisis`; $("social-negative-rate").textContent = `${Math.round(Number(stats.negative_rate || 0) * 100)}% dari dianalisis`;
+  const dominant = { positif: "Dominan positif", negatif: "Dominan negatif", netral: "Dominan netral", pending: "Menunggu analisis" }[stats.dominant_sentiment] || (pending ? "Menunggu analisis" : "Belum ada data"); $("social-dominant-sentiment").textContent = dominant;
+  $("social-analyzer-note").textContent = state.health?.social_sentiment_enabled ? `Analyzer: ${state.health.social_sentiment_analyzer || "auto"} · ${analyzed} dianalisis` : "Sentiment dimatikan";
+  const topics = stats.top_topics || []; $("social-topic-trend-list").innerHTML = topics.length ? topics.slice(0, 4).map((item) => `<li><span>${escapeHtml(item.topic)}</span><strong>${fullNumber.format(item.total)} sebutan</strong><small>+${item.positif || 0} positif · −${item.negatif || 0} negatif</small></li>`).join("") : "<li><span>Belum ada aspek</span><strong>—</strong><small>Hasil muncul setelah caption dianalisis.</small></li>";
+  renderSocialTrend(stats.daily || []);
   $("social-empty").hidden = posts.length > 0;
   $("social-feed-list").innerHTML = posts.map((post) => {
     const platform = post.platform === "tiktok" ? "TikTok" : "Instagram";
     const metrics = [post.views == null ? null : `▶ ${number.format(post.views)}`, post.likes == null ? null : `♥ ${number.format(post.likes)}`, post.comments == null ? null : `◌ ${number.format(post.comments)}`].filter(Boolean).join(" · ");
-    return `<article class="social-feed-item"><div class="social-feed-meta"><span class="social-platform">${platform}</span><time>${post.published_at ? date.format(new Date(post.published_at)) : "Baru"}</time></div><p class="social-feed-author">${escapeHtml(post.author_name || "Akun publik")}</p><p class="social-feed-text">${escapeHtml(post.text)}</p><p class="social-feed-metrics">${escapeHtml(metrics || "Tanpa metrik")}</p>${post.url ? `<a class="social-feed-link" href="${escapeHtml(post.url)}" target="_blank" rel="noopener">Buka post ↗</a>` : ""}</article>`;
+    const sentimentLabel = { positif: "Positif", negatif: "Negatif", netral: "Netral", pending: "Belum dianalisis" }[post.sentiment || "pending"] || "Belum dianalisis";
+    return `<article class="social-feed-item"><div class="social-feed-meta"><span class="social-platform">${platform}</span><time>${post.published_at ? date.format(new Date(post.published_at)) : "Baru"}</time></div><p class="social-feed-author">${escapeHtml(post.author_name || "Akun publik")}</p><p class="social-feed-text">${escapeHtml(post.text)}</p><span class="social-sentiment-badge ${escapeHtml(post.sentiment || "pending")}">${sentimentLabel}</span><p class="social-feed-metrics">${escapeHtml(metrics || "Tanpa metrik")}</p>${post.url ? `<a class="social-feed-link" href="${escapeHtml(post.url)}" target="_blank" rel="noopener">Buka post ↗</a>` : ""}</article>`;
   }).join("");
-  $("social-source-note").textContent = `Sumber: TikTok & Instagram melalui Apify · ${posts.length} post relevan · media/comment crawl dimatikan untuk efisiensi`;
+  $("social-source-note").textContent = `Sumber: TikTok & Instagram melalui Apify · ${posts.length} post relevan · sentiment dihitung lokal/Gemini · media/comment crawl dimatikan`;
 }
 let toastTimer;
 export function showToast(message) { const toast = $("toast"); toast.textContent = message; toast.classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("visible"), 4200); }
