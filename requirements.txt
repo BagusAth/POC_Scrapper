@@ -3,9 +3,9 @@ uvicorn[standard]
 pydantic-settings
 python-dotenv
 aiosqlite
+asyncpg==0.30.0
 httpx
 google-genai
 google-play-scraper
 pytest
 pytest-asyncio
-

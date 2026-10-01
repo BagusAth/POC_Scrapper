@@ -8,6 +8,7 @@ __pycache__/
 htmlcov/
 data/*.db
 data/*.db-*
+data/backups/*.db
 data/inbox/*.jsonl
 !data/inbox/.gitkeep
 design/rendered/*-implementation.png

@@ -30,6 +30,7 @@ from app.api.routes_usage import create_usage_router
 from app.collectors.runner import CollectorRunner, build_collectors
 from app.config import Settings, get_settings
 from app.db import Database
+from app.db_postgres import PostgresDatabase
 from app.events import EventBroker
 from app.maps.usage import MapsUsageTracker
 from app.maps.apify_client import ApifyMapsClient
@@ -56,7 +57,21 @@ def create_app(
     settings: Settings | None = None, *, start_background: bool = True
 ) -> FastAPI:
     runtime = settings or get_settings()
-    database = Database(runtime.database_path, comment_max_age_days=runtime.comment_max_age_days)
+    use_postgres = runtime.database_backend == "postgres" or (
+        runtime.database_backend == "auto" and bool(runtime.supabase_db_url)
+    )
+    if use_postgres:
+        if not runtime.supabase_db_url:
+            raise RuntimeError(
+                "DATABASE_BACKEND=postgres membutuhkan SUPABASE_DB_URL"
+            )
+        database: Database = PostgresDatabase(
+            runtime.supabase_db_url, comment_max_age_days=runtime.comment_max_age_days
+        )
+    else:
+        database = Database(
+            runtime.database_path, comment_max_age_days=runtime.comment_max_age_days
+        )
     catalog = ProductCatalog.from_path(runtime.products_path)
     broker = EventBroker()
     worker = AnalyzerWorker(runtime, database, broker)

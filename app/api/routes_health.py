@@ -41,6 +41,12 @@ def create_health_router(
         }
         return {
             "status": "ok",
+            "database_backend": (
+                "postgres"
+                if settings.database_backend == "postgres"
+                or (settings.database_backend == "auto" and bool(settings.supabase_db_url))
+                else "sqlite"
+            ),
             "sources_active": sources,
             "youtube_configured": bool(settings.youtube_api_key),
             "youtube_mode": "api" if settings.youtube_api_key else "public",

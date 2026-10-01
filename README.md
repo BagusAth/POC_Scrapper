@@ -25,11 +25,23 @@ Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Tiga topik awal tersedia: C
 
 ### Deploy ke Vercel (POC)
 
-Vercel mengenali `index.py` sebagai entrypoint FastAPI. Deploy dari root repo dengan `npx vercel --prod`, lalu isi Environment Variables `APIFY_TOKEN`, `SOURCES=youtube_trend,maps,tiktok,instagram`, dan `DATABASE_PATH=/tmp/umkm-poc.db` pada project Vercel. Filesystem `/tmp` bersifat sementara pada serverless; gunakan database eksternal sebelum mengandalkan riwayat lintas instance.
+Vercel mengenali `index.py` sebagai entrypoint FastAPI. Deploy dari root repo dengan `npx vercel --prod`, lalu isi Environment Variables `APIFY_TOKEN`, `SOURCES=youtube_trend,maps,tiktok,instagram`, dan `SUPABASE_DB_URL` pada project Vercel. Gunakan connection string Supavisor/session pooler yang server-side. Jika variabel tersebut kosong, aplikasi kembali memakai SQLite `/tmp` yang bersifat sementara.
 
 ### Supabase MCP
 
-Repo ini menyertakan `.mcp.json` untuk Supabase MCP yang dibatasi ke project `itbzozqigakvotvadreb` dan mode `read_only`. Buka ulang client MCP/Codex dari root repo ini, lalu selesaikan OAuth Supabase saat diminta. Konfigurasi tidak menyimpan API key atau service-role secret.
+Repo ini menyertakan `.mcp.json` untuk Supabase MCP yang dibatasi ke project `itbzozqigakvotvadreb`. OAuth MCP sudah dikonfigurasi lewat Codex CLI; muat ulang sesi agar tools Supabase muncul. Konfigurasi tidak menyimpan API key, password database, atau service-role secret.
+
+MCP dipakai untuk pengelolaan dan inspeksi, bukan sebagai koneksi runtime scraper. Runtime memakai `SUPABASE_DB_URL` hanya di server. Tabel dibuat di schema privat `scraper`, sehingga tidak diekspos ke Data API `public`.
+
+Backup SQLite yang ada ke Supabase bersifat additive dan transactional:
+
+```bash
+source .venv/bin/activate
+python scripts/backup_sqlite_to_supabase.py --dry-run
+SUPABASE_DB_URL='postgresql://...' python scripts/backup_sqlite_to_supabase.py
+```
+
+Baris remote yang sudah ada tidak dihapus atau ditimpa. Setelah backup terverifikasi, set `DATABASE_BACKEND=postgres` dan `SUPABASE_DB_URL` di Vercel agar Supabase menjadi sumber data utama.
 
 ## Data live dan kejujuran sumber
 
@@ -98,6 +110,8 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 | `SOCIAL_COMMENTS_ENABLED` | `false` | Komentar sengaja nonaktif untuk efisiensi |
 | `SOCIAL_SENTIMENT_ENABLED` | `true` | Analisis sentimen caption sosial yang relevan |
 | `MAX_ACTIVE_TOPICS` | `20` | Batas topik aktif |
+| `DATABASE_BACKEND` | `auto` | Memakai Postgres bila `SUPABASE_DB_URL` tersedia, selain itu SQLite |
+| `SUPABASE_DB_URL` | kosong | Connection string Supabase server-side untuk data persisten |
 | `DATABASE_PATH` | `data/app.db` | SQLite lokal |
 
 Saat `VIDEO_CLASSIFIER=auto` dan `GEMINI_API_KEY` tersedia, maksimal 50 judul diklasifikasikan per request menjadi `review`, `resep`, `ide_usaha`, atau `lainnya`. Judul diperlakukan sebagai data, request melewati rate limiter bersama, dan kegagalan selalu jatuh ke aturan lokal.
@@ -170,7 +184,7 @@ Google Maps usage guard ──► Apify Actor run ──► polling ──► da
                                       └── filter relevansi ──► places + opini produk
 ```
 
-SQLite menggunakan WAL, busy timeout, index per topik/waktu, dan tabel `api_usage` persisten. Pencarian YouTube yang mahal dan pembacaan statistik yang murah memiliki bucket kuota terpisah. Hari YouTube mengikuti zona waktu Pasifik; cap Maps mengikuti UTC.
+Supabase Postgres menjadi storage persisten saat `SUPABASE_DB_URL` tersedia; SQLite tetap dipakai untuk development dan test. Keduanya memakai index per topik/waktu dan tabel `api_usage` persisten. Pencarian YouTube yang mahal dan pembacaan statistik yang murah memiliki bucket kuota terpisah. Hari YouTube mengikuti zona waktu Pasifik; cap Maps mengikuti UTC.
 
 ## Testing
 

@@ -8,6 +8,7 @@ def test_v3_topics_health_and_usage(client: TestClient) -> None:
     assert health["yt_comments_enabled"] is False
     assert health["youtube_mode"] == "public"
     assert health["maps_configured"] is False
+    assert health["database_backend"] == "sqlite"
     assert set(client.get("/api/usage").json()) == {"youtube", "maps"}
 
     topics = client.get("/api/topics").json()["items"]

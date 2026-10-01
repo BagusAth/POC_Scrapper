@@ -3,8 +3,8 @@
 Vercel's Python runtime discovers an ASGI app exposed as ``app`` from a root
 ``index.py``.  The local deployment keeps its SQLite file under ``data/``;
 Vercel's function filesystem is read-only, so the serverless fallback uses
-``/tmp``.  For durable production data, point DATABASE_PATH at an external
-database before scaling beyond this POC.
+``/tmp``. For durable production data, set the server-only ``SUPABASE_DB_URL``
+environment variable; the app then selects Supabase Postgres automatically.
 """
 
 from __future__ import annotations

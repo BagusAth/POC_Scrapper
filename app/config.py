@@ -90,6 +90,11 @@ class Settings(BaseSettings):
     summary_min_reviews: int = 10
 
     database_path: Path = Path("data/app.db")
+    # ``auto`` keeps local development on SQLite and selects Supabase Postgres
+    # when SUPABASE_DB_URL is present. The URL is server-only and must never be
+    # exposed to the browser.
+    database_backend: Literal["auto", "sqlite", "postgres"] = "auto"
+    supabase_db_url: str = ""
     topics_path: Path = Path("config/topics.json")
     aspects_path: Path = Path("config/aspects.json")
     replay_reviews_path: Path = Path("data/replay_reviews.csv")

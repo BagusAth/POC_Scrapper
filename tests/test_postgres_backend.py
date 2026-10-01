@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+from app.config import Settings
+import pytest
+
+from app.db_postgres import POSTGRES_SCHEMA, _PoolConnection, _postgres_query, _rowcount
+
+
+def test_postgres_query_converts_qmark_placeholders() -> None:
+    assert _postgres_query("SELECT * FROM topics WHERE id=? AND status=?") == (
+        "SELECT * FROM topics WHERE id=$1 AND status=$2"
+    )
+
+
+def test_asyncpg_command_status_rowcount() -> None:
+    assert _rowcount("INSERT 0 1") == 1
+    assert _rowcount("UPDATE 12") == 12
+    assert _rowcount("DELETE 0") == 0
+
+
+def test_supabase_schema_is_private_and_indexed() -> None:
+    assert "CREATE SCHEMA IF NOT EXISTS scraper" in POSTGRES_SCHEMA
+    assert "REVOKE ALL ON SCHEMA scraper FROM PUBLIC, anon, authenticated" in POSTGRES_SCHEMA
+    assert "ALTER TABLE scraper.social_posts ENABLE ROW LEVEL SECURITY" in POSTGRES_SCHEMA
+    assert "idx_social_posts_topic" in POSTGRES_SCHEMA
+    assert "idx_comments_pending" in POSTGRES_SCHEMA
+
+
+def test_database_backend_auto_configuration() -> None:
+    settings = Settings(
+        database_backend="auto",
+        supabase_db_url="postgresql://example.invalid/postgres",
+    )
+    assert settings.database_backend == "auto"
+    assert settings.supabase_db_url.startswith("postgresql://")
+
+
+@pytest.mark.asyncio
+async def test_postgres_writes_share_transaction_until_commit() -> None:
+    class Transaction:
+        started = False
+        committed = False
+
+        async def start(self) -> None:
+            self.started = True
+
+        async def commit(self) -> None:
+            self.committed = True
+
+        async def rollback(self) -> None:
+            pass
+
+    class Connection:
+        def __init__(self) -> None:
+            self.tx = Transaction()
+            self.queries: list[tuple[str, tuple[object, ...]]] = []
+
+        def transaction(self) -> Transaction:
+            return self.tx
+
+        async def execute(self, query: str, *values: object) -> str:
+            self.queries.append((query, values))
+            return "UPDATE 1"
+
+    class Pool:
+        def __init__(self) -> None:
+            self.connection = Connection()
+            self.acquires = 0
+            self.releases = 0
+
+        async def acquire(self) -> Connection:
+            self.acquires += 1
+            return self.connection
+
+        async def release(self, connection: Connection) -> None:
+            assert connection is self.connection
+            self.releases += 1
+
+    pool = Pool()
+    adapter = _PoolConnection(pool)
+    await adapter.execute("UPDATE topics SET status=? WHERE id=?", ("active", "kopi"))
+    await adapter.execute("UPDATE topics SET is_active=? WHERE id=?", (1, "kopi"))
+    assert pool.acquires == 1
+    assert pool.connection.tx.started is True
+    assert pool.releases == 0
+
+    await adapter.commit()
+    assert pool.connection.tx.committed is True
+    assert pool.releases == 1

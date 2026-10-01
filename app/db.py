@@ -377,7 +377,9 @@ class Database:
                VALUES (?,?,?,?,?,?,?)
                ON CONFLICT(place_id,topic_id) DO UPDATE SET
                 city=excluded.city,is_relevant=excluded.is_relevant,
-                is_own=MAX(places.is_own,excluded.is_own),last_seen_at=excluded.last_seen_at""",
+                is_own=CASE WHEN places.is_own > excluded.is_own
+                    THEN places.is_own ELSE excluded.is_own END,
+                last_seen_at=excluded.last_seen_at""",
             (place_id, topic_id, city, int(is_relevant), int(is_own), timestamp, timestamp),
         )
         await self._conn().commit()
@@ -390,10 +392,15 @@ class Database:
         name_mentions_product: bool,
     ) -> None:
         await self._conn().execute(
-            """INSERT OR REPLACE INTO place_snapshots
+            """INSERT INTO place_snapshots
                (place_id,topic_id,captured_at,name,address,maps_uri,primary_type,
                 business_status,rating,user_rating_count,name_mentions_product)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(place_id,topic_id,captured_at) DO UPDATE SET
+                name=excluded.name,address=excluded.address,maps_uri=excluded.maps_uri,
+                primary_type=excluded.primary_type,business_status=excluded.business_status,
+                rating=excluded.rating,user_rating_count=excluded.user_rating_count,
+                name_mentions_product=excluded.name_mentions_product""",
             (
                 place_id, topic_id, to_utc_iso(captured_at), name, address, maps_uri,
                 primary_type, business_status, rating, user_rating_count,
@@ -410,11 +417,12 @@ class Database:
         max_comment_chars: int = 800,
     ) -> bool:
         cursor = await self._conn().execute(
-            """INSERT OR IGNORE INTO comments
+            """INSERT INTO comments
                (id,topic_id,product_id,source,place_id,text,stars,author_name,
                 author_uri,url,created_at,collected_at,mentions_product,category,
                 expires_at,status)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending')""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending')
+               ON CONFLICT DO NOTHING""",
             (
                 f"gm_{review_id}", topic_id, topic_id, "gmaps", place_id,
                 text[:max_comment_chars], stars, author_name, author_uri, url,
@@ -508,9 +516,12 @@ class Database:
             ),
         )
         await self._conn().execute(
-            """INSERT OR REPLACE INTO social_post_stats
+            """INSERT INTO social_post_stats
                (platform,post_id,topic_id,captured_at,views,likes,comments,shares)
-               VALUES (?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?)
+               ON CONFLICT(platform,post_id,topic_id,captured_at) DO UPDATE SET
+                views=excluded.views,likes=excluded.likes,
+                comments=excluded.comments,shares=excluded.shares""",
             (platform, post_id, topic_id, timestamp, views, likes, comments, shares),
         )
         await self._conn().commit()
@@ -732,8 +743,10 @@ class Database:
         if not stats:
             return 0
         await self._conn().executemany(
-            """INSERT OR REPLACE INTO video_stats
-               (video_id,captured_at,views,likes,comments) VALUES (?,?,?,?,?)""",
+            """INSERT INTO video_stats
+               (video_id,captured_at,views,likes,comments) VALUES (?,?,?,?,?)
+               ON CONFLICT(video_id,captured_at) DO UPDATE SET
+                views=excluded.views,likes=excluded.likes,comments=excluded.comments""",
             [
                 (item.video_id, to_utc_iso(item.captured_at), item.views, item.likes, item.comments)
                 for item in stats
@@ -788,9 +801,9 @@ class Database:
         if not is_comment_within_age(item.created_at, self.comment_max_age_days, now=now_dt):
             return False
         cursor = await self._conn().execute(
-            """INSERT OR IGNORE INTO comments
+            """INSERT INTO comments
                (id,topic_id,product_id,source,text,url,author_hash,created_at,collected_at)
-               VALUES (?,NULL,?,?,?,?,?,?,?)""",
+               VALUES (?,NULL,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING""",
             (
                 item.id, item.product_id, item.source, item.text[:max_comment_chars],
                 item.url, item.author_hash, to_utc_iso(item.created_at), to_utc_iso(now_dt),
