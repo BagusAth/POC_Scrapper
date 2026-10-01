@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { state } from "./state.js";
-import { renderHealth, renderLoading, renderMetrics, renderTopics, renderVideos, setConnection, showBanner, showToast } from "./ui.js";
+import { renderHealth, renderLoading, renderMaps, renderMetrics, renderTopics, renderVideos, setConnection, showBanner, showToast } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 let stream;
@@ -13,11 +13,11 @@ async function loadTopics(preferredId = "") {
   renderTopics(); return state.activeTopicId;
 }
 async function refreshTrend({ quiet = false } = {}) {
-  if (!state.activeTopicId) { state.metrics = null; state.videos = []; renderMetrics(); renderVideos(); return; }
+  if (!state.activeTopicId) { state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; renderMetrics(); renderVideos(); renderMaps(); return; }
   if (!quiet) renderLoading(true);
   try {
-    const [metrics, videoPayload] = await Promise.all([api.trend(state.activeTopicId), api.videos(state.activeTopicId, state.videoSort, state.videoType)]);
-    state.metrics = metrics; state.videos = videoPayload.items || []; renderMetrics(); renderVideos();
+    const [metrics, videoPayload, placesPayload, feedPayload] = await Promise.all([api.trend(state.activeTopicId), api.videos(state.activeTopicId, state.videoSort, state.videoType), api.mapsPlaces(state.activeTopicId), api.mapsFeed(state.activeTopicId)]);
+    state.metrics = metrics; state.videos = videoPayload.items || []; state.mapsPlaces = placesPayload.items || []; state.mapsFeed = feedPayload.items || []; renderMetrics(); renderVideos(); renderMaps();
   } catch (error) { showToast(`Tren belum dapat dimuat: ${error.message}`); }
   finally { renderLoading(false); }
 }
@@ -49,7 +49,7 @@ async function createTopic(event) {
   const payload = { name: $("topic-name").value.trim(), keywords: state.suggestion.keywords, product_terms: state.suggestion.product_terms, exclude_terms: state.suggestion.exclude_terms || [], category: $("topic-category").value, cities: [$("topic-city").value.trim()] };
   try {
     const topic = await api.createTopic(payload); closeDialog(); await loadTopics(topic.id); renderTopics();
-    state.metrics = null; state.videos = []; renderMetrics(); renderVideos();
+    state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; renderMetrics(); renderVideos(); renderMaps();
     showBanner("discovering", `Mencari video YouTube yang relevan untuk “${topic.name}”. Hasil akan muncul otomatis.`);
     clearTimeout(topicRefreshTimer); topicRefreshTimer = setTimeout(async () => { await loadTopics(topic.id); await refreshTrend({ quiet: true }); }, 5000);
   } catch (error) { $("topic-error").textContent = error.message; $("topic-error").hidden = false; }

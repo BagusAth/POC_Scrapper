@@ -156,6 +156,15 @@ class CommentIn(ApiModel):
 
 class Comment(CommentIn):
     collected_at: datetime
+    topic_id: str | None = None
+    place_id: str | None = None
+    text_is_translated: bool = False
+    stars: int | None = Field(default=None, ge=1, le=5)
+    author_name: str | None = None
+    author_uri: str | None = None
+    mentions_product: bool = False
+    category: ReviewCategory | None = None
+    expires_at: datetime | None = None
     status: Status = "pending"
     sentiment: Sentiment | None = None
     score: Annotated[float, Field(ge=-1.0, le=1.0)] | None = None

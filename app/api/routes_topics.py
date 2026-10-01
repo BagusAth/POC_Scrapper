@@ -49,7 +49,7 @@ def create_topics_router(
             items.append({
                 **topic.model_dump(mode="json"),
                 "videos_tracked": len(videos),
-                "places_relevant": 0,
+                "places_relevant": await database.count_relevant_places(topic.id),
                 "yt_last_snapshot_at": await database.get_last_snapshot_at(topic.id),
                 "maps_last_refresh_at": topic.maps_last_refresh_at,
             })

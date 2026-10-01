@@ -35,9 +35,18 @@ class Settings(BaseSettings):
 
     google_maps_api_key: str = ""
     google_maps_embed_key: str = ""
+    # Apify is the POC provider for Google Maps reviews. The token is only
+    # read by the server and is never sent to the browser.
+    maps_provider: Literal["apify", "places"] = "apify"
+    apify_token: str = ""
+    apify_actor_id: str = "compass~crawler-google-places"
+    apify_poll_interval_seconds: float = 5.0
+    apify_poll_timeout_seconds: float = 600.0
     maps_language: str = "id"
     maps_region: str = "ID"
     maps_max_pages: int = 2
+    maps_max_places_per_search: int = 3
+    maps_max_reviews_per_place: int = 10
     maps_refresh_hours: float = 8.0
     maps_daily_request_cap: int = 30
     maps_monthly_request_cap: int = 800
@@ -80,6 +89,7 @@ class Settings(BaseSettings):
     @field_validator(
         "youtube_daily_quota", "yt_search_reserve_units", "yt_trend_lookback_days",
         "yt_search_date_pages", "yt_max_videos_per_topic", "maps_max_pages",
+        "maps_max_places_per_search", "maps_max_reviews_per_place",
         "maps_daily_request_cap", "maps_monthly_request_cap", "maps_content_ttl_days",
         "demo_budget_units", "max_active_topics", "gemini_rpm", "batch_size",
         "max_gemini_failures", "summary_min_reviews", "max_comment_chars",
@@ -94,6 +104,7 @@ class Settings(BaseSettings):
     @field_validator(
         "replay_interval_seconds", "yt_search_refresh_hours", "yt_stats_interval_minutes",
         "youtube_http_timeout_seconds", "maps_refresh_hours",
+        "apify_poll_interval_seconds", "apify_poll_timeout_seconds",
         "demo_stats_interval_seconds", "batch_max_wait_seconds",
         "collect_interval_seconds",
     )

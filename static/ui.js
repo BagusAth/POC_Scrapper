@@ -26,8 +26,8 @@ export function setConnection(connected) {
 export function renderHealth() {
   const health = state.health || {}; const youtube = health.youtube_mode === "api" ? "YouTube API" : "YouTube publik"; const mapsActive = Boolean(health.maps_configured);
   $("source-status").innerHTML = `<span class="source-chip is-on"><i></i>${youtube}</span><span class="source-chip ${mapsActive ? "is-on" : "is-off"}"><i></i>Google Maps</span>`;
-  $("maps-status-badge").className = `source-chip ${mapsActive ? "is-on" : "is-off"}`; $("maps-status-badge").textContent = mapsActive ? "API siap · M4" : "Belum dikonfigurasi";
-  $("maps-status-copy").textContent = mapsActive ? "API sudah terdeteksi. Kolektor tempat dan ulasan mulai di milestone M4." : "Tambahkan GOOGLE_MAPS_API_KEY untuk mengaktifkan pengumpulan tempat dan ulasan pada M4.";
+  $("maps-status-badge").className = `source-chip ${mapsActive ? "is-on" : "is-off"}`; $("maps-status-badge").textContent = mapsActive ? `${health.maps_provider === "apify" ? "Apify aktif" : "Places aktif"}` : "Belum dikonfigurasi";
+  $("maps-status-copy").textContent = mapsActive ? "Server menjalankan pencarian tempat dan ulasan terbaru melalui Apify." : "Isi APIFY_TOKEN di .env server untuk mengaktifkan pencarian tempat dan ulasan.";
 }
 export function renderTopics() {
   $("topic-tabs").innerHTML = state.topics.length ? state.topics.map((topic) => {
@@ -90,6 +90,16 @@ export function renderVideos() {
   $("video-table-body").innerHTML = items.map((video) => `<tr><td><a class="video-title" href="${escapeHtml(video.url)}" target="_blank" rel="noopener"><span>${escapeHtml(video.title)}</span><small>${escapeHtml(video.channel_title)}</small></a></td><td><span class="type-chip type-${escapeHtml(video.content_type)}">${labels[video.content_type]}</span></td><td>${date.format(new Date(video.published_at))}</td><td class="numeric">${fullNumber.format(video.views)}</td><td class="numeric">${number.format(video.views_per_day)}</td><td class="numeric gain">${video.gain_24h === null ? "—" : `+${number.format(video.gain_24h)}`}</td></tr>`).join("");
   $("video-empty").hidden = items.length > 0; $("video-table-note").textContent = `${items.length} video ditampilkan · komentar YouTube tidak digunakan`;
   $("trend-source-note").textContent = `Data tren dari YouTube · berdasarkan sampel ${state.metrics?.videos_tracked || 0} video`;
+}
+export function renderMaps() {
+  const places = state.mapsPlaces || []; const feed = state.mapsFeed || [];
+  const relevantPlaces = places.filter((place) => place.is_relevant);
+  $("maps-count-badge").textContent = `${relevantPlaces.length} tempat`;
+  $("maps-empty").hidden = relevantPlaces.length > 0 || feed.length > 0;
+  $("maps-places-body").innerHTML = relevantPlaces.map((place) => `<tr><td><a class="maps-place-link" href="${escapeHtml(place.maps_uri || "#")}" target="_blank" rel="noopener">${escapeHtml(place.name || "Tempat")}</a><small class="maps-place-address">${escapeHtml(place.address || "")}</small></td><td>${escapeHtml(place.city || "—")}</td><td class="numeric">${place.rating == null ? "—" : Number(place.rating).toFixed(1)}</td><td class="numeric">${place.user_rating_count == null ? "—" : fullNumber.format(place.user_rating_count)}</td></tr>`).join("");
+  const placeNames = Object.fromEntries(places.map((place) => [place.place_id, place.name]));
+  $("maps-feed-list").innerHTML = feed.map((item) => `<article class="maps-feed-item"><div class="maps-feed-meta"><span class="maps-feed-stars">${item.stars == null ? "☆" : `${"★".repeat(Math.max(0, Math.min(5, Number(item.stars))))}${"☆".repeat(Math.max(0, 5 - Number(item.stars)))}`}</span><time>${item.created_at ? date.format(new Date(item.created_at)) : "Baru"}</time></div><p class="maps-feed-text">${escapeHtml(item.text)}</p><p class="maps-feed-place">${escapeHtml(placeNames[item.place_id] || "Google Maps")}</p></article>`).join("");
+  $("maps-source-note").textContent = `Sumber: Google Maps melalui Apify · ${feed.length} opini tersimpan · ulasan difilter berdasarkan kata produk`;
 }
 let toastTimer;
 export function showToast(message) { const toast = $("toast"); toast.textContent = message; toast.classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("visible"), 4200); }

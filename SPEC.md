@@ -1,4 +1,4 @@
-# SPEC v3 — Pemantau Tren & Opini UMKM (YouTube Tren + Google Maps Opini)
+# SPEC v3 — Pemantau Tren & Opini UMKM (YouTube Tren + Google Maps/Apify Opini)
 
 > Spesifikasi untuk AI coding agent (Codex). Simpan di root repo sebagai `SPEC.md`.
 > **Menggantikan SPEC v2 dan PATCH v2.1.** Kerjakan per milestone (bagian 16), jangan sekaligus.
@@ -15,6 +15,10 @@
 6. Type hints di semua fungsi. File idealnya < 200 baris.
 7. Teks UI Bahasa Indonesia; nama variabel/fungsi/file Bahasa Inggris.
 8. **Setiap panggilan API berbayar/berkuota wajib lewat tracker** (YouTube: `QuotaTracker`; Maps: `MapsUsageTracker`).
+
+### 0.2 Provider Maps POC (implementasi saat ini)
+
+Implementasi POC memakai Apify Actor `compass~crawler-google-places`, mengikuti pola integrasi Exasti UMKM: mulai Actor run di server, polling status sampai terminal, lalu membaca dataset hasil. Token disimpan di `APIFY_TOKEN` dan tidak pernah dikirim ke browser. Bagian 9.1 yang membahas Places API langsung dipertahankan sebagai opsi provider berikutnya; jalur aktif saat ini adalah `app/maps/apify_client.py` dan endpoint `/api/maps/*`.
 
 ### 0.1 Migrasi dari v2 / v2.1
 Repo saat ini dibangun dengan SPEC v2 (mungkin sebagian PATCH v2.1). Lakukan:
@@ -41,7 +45,7 @@ Repo saat ini dibangun dengan SPEC v2 (mungkin sebagian PATCH v2.1). Lakukan:
 | Sumber | Peran | Pertanyaan yang dijawab |
 |---|---|---|
 | **YouTube Data API** | **Sinyal tren** | Apakah minat online terhadap produk ini naik? Konten apa yang sedang ramai (review, resep, ide usaha)? |
-| **Google Maps (Places API New)** | **Sinyal opini** | Apa kata pelanggan nyata tentang produk ini di penjual-penjual di kota tersebut? Apa yang dipuji dan dikeluhkan? Siapa pesaing yang sedang tumbuh? |
+| **Google Maps via Apify** | **Sinyal opini** | Apa kata pelanggan nyata tentang produk ini di penjual-penjual di kota tersebut? Apa yang dipuji dan dikeluhkan? Siapa pesaing yang sedang tumbuh? |
 
 Keduanya disatukan oleh **Sintesis AI (Gemini)** yang membaca angka tren dan ringkasan opini, lalu menghasilkan bacaan pasar dan **ide inovasi** untuk UMKM.
 
@@ -75,7 +79,7 @@ Tidak ada dependency baru dibanding v2.
 | Web | FastAPI + Uvicorn |
 | Konfigurasi | `pydantic-settings` + `python-dotenv` |
 | Database | SQLite via `aiosqlite` (WAL) |
-| HTTP | `httpx` async (YouTube Data API & Places API New) |
+| HTTP | `httpx` async (YouTube Data API & Apify REST API) |
 | AI | `google-genai` (client async) |
 | Frontend | HTML + vanilla JS + CSS; Chart.js via `cdnjs.cloudflare.com` (pin versi) |
 | Test | `pytest`, `pytest-asyncio`, `httpx.MockTransport`, FastAPI `TestClient` |
@@ -204,9 +208,16 @@ YOUTUBE_HTTP_TIMEOUT_SECONDS=10
 # ---------- Google Maps (opini) ----------
 GOOGLE_MAPS_API_KEY=                    # key server: Places API (New) saja
 GOOGLE_MAPS_EMBED_KEY=                  # opsional, key browser: Maps Embed API saja, dibatasi HTTP referrer
+MAPS_PROVIDER=apify
+APIFY_TOKEN=                             # token server; jangan kirim ke browser
+APIFY_ACTOR_ID=compass~crawler-google-places
+APIFY_POLL_INTERVAL_SECONDS=5
+APIFY_POLL_TIMEOUT_SECONDS=600
 MAPS_LANGUAGE=id
 MAPS_REGION=ID
 MAPS_MAX_PAGES=2                        # 20 tempat per halaman
+MAPS_MAX_PLACES_PER_SEARCH=3
+MAPS_MAX_REVIEWS_PER_PLACE=10
 MAPS_REFRESH_HOURS=8
 MAPS_DAILY_REQUEST_CAP=30
 MAPS_MONTHLY_REQUEST_CAP=800
@@ -508,9 +519,15 @@ Semua metrik dihitung per topik dari tabel `videos` + `video_stats`. **Definisi 
 
 ---
 
-## 9. Google Maps Opini (Places API New)
+## 9. Google Maps Opini (Apify POC)
 
-### 9.1 Endpoint
+### 9.0 Jalur Apify yang aktif
+
+Untuk setiap topik dan kota, server mengirim `searchStringsArray`, `locationQuery`, `maxCrawledPlacesPerSearch`, `maxReviews`, `reviewsSort=newest`, `reviewsStartDate`, `reviewsOrigin=google`, `language=id`, `scrapePlaceDetailPage=true`, dan `scrapeReviewsPersonalData=false` ke Actor. Satu run dihitung sebagai satu unit `maps_apify_run`; polling status tidak menggandakan biaya. Dataset dinormalisasi, difilter relevansinya (nama/kata produk atau teks ulasan), lalu disimpan dengan TTL ulasan.
+
+Referensi kontrak Actor: [input schema Google Maps Scraper](https://apify.com/compass/crawler-google-places/input-schema), [Actor API](https://apify.com/compass/crawler-google-places/api), dan [Apify API authentication/run lifecycle](https://docs.apify.com/api/v2/getting-started).
+
+### 9.1 Provider Places API langsung (opsional, belum aktif)
 
 **Text Search (New)** — jalur utama:
 ```
@@ -756,8 +773,8 @@ Semua JSON, waktu ISO 8601 UTC, error `{"detail": "<pesan Bahasa Indonesia>"}`.
 | `DELETE /api/topics/{id}` | Soft delete |
 | `GET /api/trend?topic_id=` | Semua metrik bagian 8.6 + `supply_trend`, `attention_trend`, `competition_signal`, `last_snapshot_at` |
 | `GET /api/trend/videos?topic_id=&sort=gain\|views_per_day\|recent&type=` | Daftar video untuk tabel "Video teratas" |
-| `GET /api/places?topic_id=&city=` | Tabel pesaing: nama, alamat, rating, jumlah ulasan, `review_growth_7d`, badge spesialis/milik sendiri, `maps_uri` |
-| `GET /api/feed?topic_id=&category=&sentiment=&place_id=&q=&window=&limit=&before=` | Feed ulasan. `category` default `opini_produk`, bisa `opini_tempat` atau `all`. Urutan **`created_at DESC, id DESC`**, cursor `"<created_at>\|<id>"`. Item memuat `stars`, `author_name`, `author_uri`, `place_name`, `url` |
+| `GET /api/maps/places?topic_id=` | Tempat hasil Apify: nama, kota, alamat, rating, jumlah ulasan, status relevansi, `maps_uri` |
+| `GET /api/maps/feed?topic_id=&limit=` | Feed opini Maps hasil filter produk. Urutan **`created_at DESC, id DESC`**. Item memuat `stars`, `author_name`, `author_uri`, `place_id`, `url` |
 | `GET /api/stats?topic_id=&window=&ngram=` | Metrik bagian 9.7; default `window = DEFAULT_WINDOW` |
 | `GET /api/summary?topic_id=&refresh=` | Sintesis bagian 11 |
 | `GET /api/stream` | SSE (bagian 13) |
@@ -848,12 +865,12 @@ Schema bagian 7, `.env.example` v3, `config/topics.json` & `aspects.json` v3, `Y
 KPI, tiga grafik, sinyal persaingan, tabel video teratas, event `trend_tick`.
 - **AC:** dengan `DEMO_MODE=true`, angka "Live: +X views/jam" berubah tanpa refresh setiap snapshot; "butuh 48 jam data" tampil saat riwayat belum cukup; tabel bisa difilter per jenis konten.
 
-### M4 — Google Maps: tempat & pesaing
-`maps/client.py`, `errors.py`, `usage.py`, `parsing.py`, `relevance.py`, `collector.py`, `metrics.py` (bagian pesaing), `GET /api/places`, `scripts/maps_probe.py`.
+### M4 — Google Maps: tempat & pesaing (Apify POC)
+`maps/apify_client.py`, `errors.py`, `usage.py`, `parsing.py`, `relevance.py`, `collector.py`, `GET /api/maps/places` (serta alias `/api/places`), `scripts/maps_probe.py`.
 - **AC:**
-  - Test: field mask & header benar, key disensor, pemetaan semua error 9.2, pagination, relevansi (nama spesialis, ulasan menyebut produk, tempat tutup permanen), batas harian/bulanan menolak request.
-  - Dengan key asli, `maps_probe.py "cappuccino cincau" --city Bandung` mencetak tempat relevan, rating, jumlah ulasan yang menyebut produk, dan request terpakai.
-  - `GET /api/places` mengembalikan tabel pesaing dengan `weighted_rating`.
+  - Test: Bearer header, input Actor, run polling, dataset parsing, error mapping, relevansi (nama spesialis, ulasan menyebut produk, tempat tutup permanen), batas harian/bulanan menolak run.
+  - Dengan token asli, `maps_probe.py "cappuccino cincau" --city Bandung` mencetak tempat relevan, rating, jumlah ulasan yang menyebut produk, dan request terpakai.
+  - `GET /api/maps/places` mengembalikan tabel tempat hasil Apify; provider Places API langsung tetap opsi berikutnya.
 
 ### M5 — Ulasan → analisis opini
 Pemetaan ulasan 9.6, analyzer bagian 10, `GET /api/feed`, `GET /api/stats`, `maintenance.py` (TTL).

@@ -5,7 +5,7 @@ POC v3 membantu UMKM membaca dua sinyal yang berbeda:
 - **YouTube untuk tren produk** — pasokan video, pertumbuhan views, format konten, dan sinyal persaingan.
 - **Google Maps untuk opini pelanggan** — tempat, rating, ulasan produk, dan pesaing lokal.
 
-Implementasi saat ini selesai sampai **P3/M3**: fondasi data dan kuota, discovery YouTube, snapshot metrik, live ticker SSE, dashboard tren, serta pencarian topik produk bebas. Kolektor Google Maps dimulai pada M4; status dan budget guard-nya sudah tersedia, tetapi UI tidak mengklaim bahwa ulasan Maps sudah dikumpulkan.
+Implementasi saat ini mencakup **P3/M3 + Maps POC**: fondasi data dan kuota, discovery YouTube, snapshot metrik, live ticker SSE, dashboard tren, serta kolektor opini Google Maps melalui Apify. Tanpa `APIFY_TOKEN`, aplikasi tidak melakukan request dan secara jujur menampilkan Maps belum dikonfigurasi.
 
 ## Jalankan dalam kurang dari 10 menit
 
@@ -30,7 +30,8 @@ Dashboard tidak memakai data demo untuk Panel A.
 - Jika key kosong, POC memakai halaman pencarian dan halaman video YouTube yang publik. Angka views dibaca ulang pada snapshot berikutnya. Mode ini tetap data nyata, tetapi bersifat **best effort** dan lebih mudah berubah dibanding API resmi.
 - Komentar YouTube sengaja dimatikan (`YT_COMMENTS_ENABLED=false`). Komentar video sering membahas kreator/tutorial, bukan pengalaman terhadap produk.
 - Angka tren adalah sampel hasil pencarian, bukan seluruh YouTube. Produk niche memang dapat menunjukkan kenaikan kecil atau tidak ada video; aplikasi tidak mengarang angka untuk mengisi grafik.
-- Google Maps ditampilkan sebagai **belum dikonfigurasi / tahap berikutnya** sampai kolektor M4 tersedia dan key server diisi.
+- Jika `APIFY_TOKEN` diisi, server menjalankan Actor `compass~crawler-google-places`, menunggu status `SUCCEEDED`, lalu mengambil dataset ulasan terbaru. Hasilnya difilter berdasarkan nama/kata produk sebelum masuk feed opini.
+- Jika token kosong, tidak ada data Maps sintetis yang dibuat; health API menampilkan `Google Maps (Apify) belum dikonfigurasi`.
 
 Uji satu kata produk tanpa mengubah database utama:
 
@@ -38,9 +39,10 @@ Uji satu kata produk tanpa mengubah database utama:
 source .venv/bin/activate
 python scripts/yt_trend_probe.py "cappuccino cincau"
 python scripts/yt_trend_probe.py "keripik pisang"
+python scripts/maps_probe.py "sepatu lokal" --city Bandung
 ```
 
-Probe mencetak query, jumlah kandidat/relevan, komposisi konten, video teratas, dan unit API yang dipakai.
+Probe YouTube mencetak query, jumlah kandidat/relevan, komposisi konten, video teratas, dan unit API yang dipakai. Probe Maps menjalankan satu Actor Apify dan hanya mencetak ringkasan tempat relevan; tanpa token probe berhenti sebelum mengirim request.
 
 ## Konfigurasi utama
 
@@ -59,7 +61,14 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 | `VIDEO_CLASSIFIER` | `auto` | Gemini bila tersedia, lalu fallback aturan |
 | `GEMINI_API_KEY` | kosong | Klasifikasi judul dan fitur AI tahap lanjut |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Model Gemini |
-| `GOOGLE_MAPS_API_KEY` | kosong | Key server Places API (New), dipakai mulai M4 |
+| `MAPS_PROVIDER` | `apify` | Provider Maps POC (`apify` atau `places` untuk integrasi berikutnya) |
+| `APIFY_TOKEN` | kosong | Token server Apify; jangan pernah dikirim ke browser |
+| `APIFY_ACTOR_ID` | `compass~crawler-google-places` | Actor Google Maps yang dijalankan |
+| `APIFY_POLL_INTERVAL_SECONDS` | `5` | Jeda polling status run |
+| `APIFY_POLL_TIMEOUT_SECONDS` | `600` | Batas waktu satu run |
+| `MAPS_MAX_PLACES_PER_SEARCH` | `3` | Cap tempat per kota pada POC |
+| `MAPS_MAX_REVIEWS_PER_PLACE` | `10` | Cap ulasan per tempat pada POC |
+| `GOOGLE_MAPS_API_KEY` | kosong | Disimpan untuk provider Places API langsung di tahap berikutnya |
 | `GOOGLE_MAPS_EMBED_KEY` | kosong | Key browser terpisah dan opsional |
 | `MAPS_DAILY_REQUEST_CAP` | `30` | Hard cap request Maps per hari |
 | `MAPS_MONTHLY_REQUEST_CAP` | `800` | Hard cap request Maps per bulan |
@@ -69,17 +78,19 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 
 Saat `VIDEO_CLASSIFIER=auto` dan `GEMINI_API_KEY` tersedia, maksimal 50 judul diklasifikasikan per request menjadi `review`, `resep`, `ide_usaha`, atau `lainnya`. Judul diperlakukan sebagai data, request melewati rate limiter bersama, dan kegagalan selalu jatuh ke aturan lokal.
 
-## Setup key Google Cloud
+## Setup key dan Apify
 
 Untuk mode API resmi:
 
 1. Buat project Google Cloud.
 2. Aktifkan **YouTube Data API v3**.
-3. Untuk tahap Maps M4+, aktifkan **Places API (New)** dan billing.
-4. Buat key server, batasi key hanya ke API yang benar, lalu isi `YOUTUBE_API_KEY` dan/atau `GOOGLE_MAPS_API_KEY`.
-5. Pasang quota harian dan budget alert di Google Cloud; aplikasi juga menerapkan cap lokal.
-6. Jika kelak memakai Maps Embed, buat key browser berbeda yang hanya mengizinkan Maps Embed API dan referrer aplikasi.
+3. Buat token Apify dengan scope minimum yang diperlukan, lalu isi `APIFY_TOKEN` di `.env` (server saja).
+4. Biarkan `MAPS_PROVIDER=apify`; aplikasi memakai Actor `compass~crawler-google-places` dan cap lokal `MAPS_*`.
+5. Jika kelak memakai provider Places langsung, baru isi `GOOGLE_MAPS_API_KEY` dan ubah `MAPS_PROVIDER=places`.
+6. Jika memakai Maps Embed, buat key browser berbeda yang hanya mengizinkan Maps Embed API dan referrer aplikasi.
 7. Buat Gemini key melalui Google AI Studio dan isi `GEMINI_API_KEY`.
+
+Referensi Actor: [input schema Google Maps Scraper](https://apify.com/compass/crawler-google-places/input-schema) dan [API Actor](https://apify.com/compass/crawler-google-places/api).
 
 Restart server setelah mengubah `.env`. Jangan pernah menggunakan key server di JavaScript browser.
 
@@ -104,6 +115,8 @@ Snapshot tidak diubah setelah ditulis. Event `trend_tick` dikirim lewat Server-S
 - `DELETE /api/topics/{id}` — nonaktifkan topik.
 - `GET /api/trend?topic_id=...` — seluruh metrik tren.
 - `GET /api/trend/videos?topic_id=...&sort=gain&type=review` — tabel bukti video.
+- `GET /api/maps/places?topic_id=...` — tempat relevan dan snapshot rating dari koleksi Apify.
+- `GET /api/maps/feed?topic_id=...` — opini Maps yang lolos filter produk.
 - `GET /api/stream` — `trend_tick`, `topic_status`, dan keep-alive.
 - `GET /docs` — dokumentasi OpenAPI interaktif.
 
@@ -124,7 +137,9 @@ Topik produk
    └─────────────────────────────────────────────▼
                                          Dashboard Panel A
 
-Google Maps usage guard + schema ──► kolektor tempat/opini pada M4+
+Google Maps usage guard ──► Apify Actor run ──► polling ──► dataset
+                                      │
+                                      └── filter relevansi ──► places + opini produk
 ```
 
 SQLite menggunakan WAL, busy timeout, index per topik/waktu, dan tabel `api_usage` persisten. Pencarian YouTube yang mahal dan pembacaan statistik yang murah memiliki bucket kuota terpisah. Hari YouTube mengikuti zona waktu Pasifik; cap Maps mengikuti UTC.
@@ -152,7 +167,7 @@ Perintah ini menghapus database lokal aplikasi, membuat schema v3, dan menanam t
 
 - Key server tidak pernah masuk response API atau frontend.
 - Panel tren menyimpan metadata publik dan snapshot agregat video, bukan komentar YouTube.
-- Implementasi Maps M4 wajib menjaga atribusi penulis/Google, TTL konten, pembatasan cache, dan ketentuan Places API terbaru. Place ID dapat dipertahankan; konten Places tidak boleh dianggap bebas disimpan permanen.
+- Implementasi Maps menjaga atribusi penulis/Google, TTL konten, pembatasan cache, dan ketentuan sumber yang dipakai. Place ID dapat dipertahankan; konten Places/ulasan memiliki TTL POC.
 - Data Places tidak boleh ditempelkan pada peta non-Google.
 - Tinjau ketentuan Google Maps Platform terbaru sebelum penggunaan produksi; TTL POC bukan jaminan kepatuhan.
 
@@ -160,12 +175,12 @@ Perintah ini menghapus database lokal aplikasi, membuat schema v3, dan menanam t
 
 ```text
 app/youtube/       discovery, client, quota, snapshot, metrik, scheduler
-app/maps/          fondasi error dan budget guard Maps
+app/maps/          Apify client, parser, relevansi, collector, error, budget guard
 app/topics/        layanan watchlist produk
 app/api/           endpoint topics, trend, usage, health, SSE
 static/            dashboard P3 responsif
 config/            seed topik dan aspek
-scripts/           reset database dan probe YouTube
+scripts/           reset database dan probe sumber
 tests/             unit/integrasi tanpa API eksternal
 ```
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -284,6 +284,133 @@ class Database:
             )
         await self._conn().commit()
 
+    async def update_topic_maps_refresh(
+        self, topic_id: str, refreshed_at: datetime, *, status: str | None = None
+    ) -> None:
+        if status:
+            await self._conn().execute(
+                "UPDATE topics SET status=?, maps_last_refresh_at=? WHERE id=?",
+                (status, to_utc_iso(refreshed_at), topic_id),
+            )
+        else:
+            await self._conn().execute(
+                "UPDATE topics SET maps_last_refresh_at=? WHERE id=?",
+                (to_utc_iso(refreshed_at), topic_id),
+            )
+        await self._conn().commit()
+
+    async def upsert_place(
+        self, *, topic_id: str, place_id: str, city: str, is_relevant: bool,
+        is_own: bool = False, seen_at: datetime,
+    ) -> None:
+        timestamp = to_utc_iso(seen_at)
+        await self._conn().execute(
+            """INSERT INTO places
+               (place_id,topic_id,city,is_relevant,is_own,first_seen_at,last_seen_at)
+               VALUES (?,?,?,?,?,?,?)
+               ON CONFLICT(place_id,topic_id) DO UPDATE SET
+                city=excluded.city,is_relevant=excluded.is_relevant,
+                is_own=MAX(places.is_own,excluded.is_own),last_seen_at=excluded.last_seen_at""",
+            (place_id, topic_id, city, int(is_relevant), int(is_own), timestamp, timestamp),
+        )
+        await self._conn().commit()
+
+    async def insert_place_snapshot(
+        self, *, topic_id: str, place_id: str, captured_at: datetime,
+        name: str, address: str | None, maps_uri: str | None,
+        primary_type: str | None, business_status: str | None,
+        rating: float | None, user_rating_count: int | None,
+        name_mentions_product: bool,
+    ) -> None:
+        await self._conn().execute(
+            """INSERT OR REPLACE INTO place_snapshots
+               (place_id,topic_id,captured_at,name,address,maps_uri,primary_type,
+                business_status,rating,user_rating_count,name_mentions_product)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                place_id, topic_id, to_utc_iso(captured_at), name, address, maps_uri,
+                primary_type, business_status, rating, user_rating_count,
+                int(name_mentions_product),
+            ),
+        )
+        await self._conn().commit()
+
+    async def insert_maps_comment(
+        self, *, topic_id: str, place_id: str, review_id: str, text: str,
+        stars: int | None, author_name: str | None, author_uri: str | None,
+        url: str | None, created_at: datetime, collected_at: datetime,
+        mentions_product: bool, category: str, expires_at: datetime,
+        max_comment_chars: int = 800,
+    ) -> bool:
+        cursor = await self._conn().execute(
+            """INSERT OR IGNORE INTO comments
+               (id,topic_id,product_id,source,place_id,text,stars,author_name,
+                author_uri,url,created_at,collected_at,mentions_product,category,
+                expires_at,status)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending')""",
+            (
+                f"gm_{review_id}", topic_id, topic_id, "gmaps", place_id,
+                text[:max_comment_chars], stars, author_name, author_uri, url,
+                to_utc_iso(created_at), to_utc_iso(collected_at), int(mentions_product),
+                category, to_utc_iso(expires_at),
+            ),
+        )
+        await self._conn().commit()
+        return cursor.rowcount == 1
+
+    async def count_relevant_places(self, topic_id: str) -> int:
+        cursor = await self._conn().execute(
+            "SELECT COUNT(*) FROM places WHERE topic_id=? AND is_relevant=1", (topic_id,)
+        )
+        return int((await cursor.fetchone())[0])
+
+    async def list_places_latest(self, topic_id: str) -> list[dict[str, Any]]:
+        cursor = await self._conn().execute(
+            """SELECT p.place_id,p.topic_id,p.city,p.is_relevant,p.is_own,
+                      p.first_seen_at,p.last_seen_at,s.captured_at,s.name,s.address,
+                      s.maps_uri,s.primary_type,s.business_status,s.rating,
+                      s.user_rating_count,s.name_mentions_product
+               FROM places p
+               LEFT JOIN place_snapshots s ON s.place_id=p.place_id AND s.topic_id=p.topic_id
+                 AND s.captured_at=(SELECT MAX(s2.captured_at) FROM place_snapshots s2
+                                    WHERE s2.place_id=p.place_id AND s2.topic_id=p.topic_id)
+               WHERE p.topic_id=? ORDER BY p.is_relevant DESC,p.last_seen_at DESC,p.place_id""",
+            (topic_id,),
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+    async def get_topic_feed(
+        self, topic_id: str, *, limit: int = 50, before: tuple[datetime, str] | None = None
+    ) -> list[Comment]:
+        clauses, params = ["topic_id=?"], [topic_id]
+        if before:
+            cursor_time = to_utc_iso(before[0])
+            clauses.append("(created_at<? OR (created_at=? AND id<?))")
+            params.extend((cursor_time, cursor_time, before[1]))
+        params.append(min(max(limit, 1), 200))
+        cursor = await self._conn().execute(
+            f"SELECT * FROM comments WHERE {' AND '.join(clauses)} ORDER BY created_at DESC,id DESC LIMIT ?",
+            params,
+        )
+        return [_row_to_comment(row) for row in await cursor.fetchall()]
+
+    async def purge_expired_maps(self, *, now: datetime, snapshot_ttl_days: int = 7) -> int:
+        """Remove cached Maps content after its explicit POC TTL."""
+        cutoff = to_utc_iso(now)
+        cursor = await self._conn().execute(
+            "DELETE FROM comments WHERE source='gmaps' AND expires_at IS NOT NULL AND expires_at<?",
+            (cutoff,),
+        )
+        deleted = cursor.rowcount
+        snapshot_cutoff = to_utc_iso(
+            now.replace(microsecond=0) - timedelta(days=snapshot_ttl_days)
+        )
+        await self._conn().execute(
+            "DELETE FROM place_snapshots WHERE captured_at<?", (snapshot_cutoff,)
+        )
+        await self._conn().commit()
+        return deleted
+
     async def deactivate_topic(self, topic_id: str) -> bool:
         cursor = await self._conn().execute(
             "UPDATE topics SET is_active=0,status='inactive' WHERE id=? AND is_active=1",
@@ -459,7 +586,7 @@ class Database:
 
     async def fetch_pending(self, limit: int = 25, max_attempts: int = 5) -> list[Comment]:
         cursor = await self._conn().execute(
-            """SELECT * FROM comments WHERE topic_id IS NULL AND status='pending'
+            """SELECT * FROM comments WHERE (topic_id IS NULL OR source='gmaps') AND status='pending'
                AND attempts<? ORDER BY collected_at ASC LIMIT ?""", (max_attempts, limit),
         )
         return [_row_to_comment(row) for row in await cursor.fetchall()]
@@ -499,7 +626,9 @@ class Database:
         await self._conn().commit()
 
     async def count_pending(self) -> int:
-        cursor = await self._conn().execute("SELECT COUNT(*) FROM comments WHERE status='pending'")
+        cursor = await self._conn().execute(
+            "SELECT COUNT(*) FROM comments WHERE (topic_id IS NULL OR source='gmaps') AND status='pending'"
+        )
         return int((await cursor.fetchone())[0])
 
     async def get_analyzed_recent(self, product_id: str | None = None, limit: int = 60) -> list[Comment]:

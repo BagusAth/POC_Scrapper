@@ -15,4 +15,6 @@ export const api = {
   removeTopic: (id) => request(`/api/topics/${encodeURIComponent(id)}`, { method: "DELETE" }),
   trend: (topicId) => request(`/api/trend?${query({ topic_id: topicId })}`),
   videos: (topicId, sort, type) => request(`/api/trend/videos?${query({ topic_id: topicId, sort, type })}`),
+  mapsPlaces: (topicId) => request(`/api/maps/places?${query({ topic_id: topicId })}`),
+  mapsFeed: (topicId, limit = 30) => request(`/api/maps/feed?${query({ topic_id: topicId, limit })}`),
 };

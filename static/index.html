@@ -69,8 +69,18 @@
 
       <section class="maps-preview" aria-label="Status Google Maps">
         <div class="maps-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg></div>
-        <div><p class="panel-label">Panel B · tahap berikutnya</p><h3>Opini lokasi dari Google Maps</h3><p id="maps-status-copy">Tambahkan Google Maps API key untuk mengaktifkan pengumpulan tempat dan ulasan pada M4.</p></div>
+        <div><p class="panel-label">Panel B · opini pelanggan</p><h3>Opini lokasi dari Google Maps</h3><p id="maps-status-copy">Menunggu konfigurasi Apify di server.</p></div>
         <span id="maps-status-badge" class="source-chip is-off">Belum dikonfigurasi</span>
+      </section>
+
+      <section class="panel maps-panel" aria-labelledby="maps-panel-title">
+        <div class="panel-heading"><div><p class="panel-label">Apify · Google Maps</p><h3 id="maps-panel-title">Tempat relevan &amp; opini terbaru</h3><p id="maps-panel-note" class="panel-note">Hanya ulasan yang terkait dengan produk yang dipantau.</p></div><span id="maps-count-badge" class="ticker">0 tempat</span></div>
+        <div class="maps-data-grid">
+          <div><h4 class="maps-subtitle">Penjual ditemukan</h4><div class="table-scroller"><table><thead><tr><th>Tempat</th><th>Kota</th><th>Rating</th><th>Ulasan</th></tr></thead><tbody id="maps-places-body"></tbody></table></div></div>
+          <div><h4 class="maps-subtitle">Feed opini produk</h4><div id="maps-feed-list" class="maps-feed-list"></div></div>
+        </div>
+        <div id="maps-empty" class="table-empty" hidden><strong>Belum ada opini Maps</strong><span>Isi APIFY_TOKEN lalu tunggu refresh topik.</span></div>
+        <p id="maps-source-note" class="data-footer">Sumber: Google Maps melalui Apify · belum ada data</p>
       </section>
     </main>
   </div>
