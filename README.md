@@ -27,6 +27,10 @@ Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Tiga topik awal tersedia: C
 
 Vercel mengenali `index.py` sebagai entrypoint FastAPI. Deploy dari root repo dengan `npx vercel --prod`, lalu isi Environment Variables `APIFY_TOKEN`, `SOURCES=youtube_trend,maps,tiktok,instagram`, dan `DATABASE_PATH=/tmp/umkm-poc.db` pada project Vercel. Filesystem `/tmp` bersifat sementara pada serverless; gunakan database eksternal sebelum mengandalkan riwayat lintas instance.
 
+### Supabase MCP
+
+Repo ini menyertakan `.mcp.json` untuk Supabase MCP yang dibatasi ke project `itbzozqigakvotvadreb` dan mode `read_only`. Buka ulang client MCP/Codex dari root repo ini, lalu selesaikan OAuth Supabase saat diminta. Konfigurasi tidak menyimpan API key atau service-role secret.
+
 ## Data live dan kejujuran sumber
 
 Dashboard tidak memakai data demo untuk Panel A.
