@@ -13,7 +13,7 @@ import os
 
 # Keep the hosted POC on the same live sources as the local dashboard. Vercel
 # project environment variables override these defaults without changing code.
-os.environ.setdefault("SOURCES", "youtube_trend,maps,tiktok,instagram")
+os.environ.setdefault("SOURCES", "youtube_trend,maps,tiktok,instagram,facebook,shopee")
 os.environ.setdefault("AI_MODE", "lexicon")
 os.environ.setdefault("DATABASE_PATH", "/tmp/umkm-poc.db")
 

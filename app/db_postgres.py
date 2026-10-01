@@ -171,6 +171,35 @@ CREATE TABLE IF NOT EXISTS scraper.social_refreshes (
     refreshed_at text NOT NULL,
     PRIMARY KEY (topic_id, platform)
 );
+CREATE TABLE IF NOT EXISTS scraper.marketplace_products (
+    platform text NOT NULL,
+    product_id text NOT NULL,
+    topic_id text NOT NULL REFERENCES scraper.topics(id) ON DELETE CASCADE,
+    title text NOT NULL,
+    description text NOT NULL DEFAULT '',
+    url text,
+    shop_name text,
+    category text,
+    price double precision,
+    original_price double precision,
+    rating double precision,
+    rating_count bigint,
+    sold_count bigint,
+    stock bigint,
+    image_url text,
+    query text,
+    first_seen_at text NOT NULL,
+    last_seen_at text NOT NULL,
+    PRIMARY KEY (platform, product_id, topic_id)
+);
+CREATE INDEX IF NOT EXISTS idx_marketplace_products_topic
+    ON scraper.marketplace_products(topic_id, platform, last_seen_at DESC);
+CREATE TABLE IF NOT EXISTS scraper.marketplace_refreshes (
+    topic_id text NOT NULL REFERENCES scraper.topics(id) ON DELETE CASCADE,
+    platform text NOT NULL,
+    refreshed_at text NOT NULL,
+    PRIMARY KEY (topic_id, platform)
+);
 CREATE TABLE IF NOT EXISTS scraper.api_usage (
     day text NOT NULL,
     api text NOT NULL,
@@ -205,6 +234,8 @@ ALTER TABLE scraper.summaries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scraper.social_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scraper.social_post_stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scraper.social_refreshes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE scraper.marketplace_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE scraper.marketplace_refreshes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scraper.api_usage ENABLE ROW LEVEL SECURITY;
 """
 

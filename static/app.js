@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { state } from "./state.js";
-import { renderHealth, renderLoading, renderMaps, renderMetrics, renderSocial, renderTopics, renderUsage, renderVideos, renderSourceNavigation, renderActiveSource, renderSourceProgress, setConnection, showBanner, showToast } from "./ui.js";
+import { renderHealth, renderLoading, renderMarketplace, renderMaps, renderMetrics, renderSocial, renderTopics, renderUsage, renderVideos, renderSourceNavigation, renderActiveSource, renderSourceProgress, setConnection, showBanner, showToast } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 let stream;
@@ -24,21 +24,22 @@ async function refreshTrend({ quiet = false } = {}) {
   const videoSort = state.videoSort;
   const videoType = state.videoType;
   const resetGroup = (key) => { state.sourceStates[key] = { loading: Boolean(topicId), loaded: false, error: "" }; };
-  ["youtube", "maps", "social"].forEach(resetGroup);
-  if (!topicId) { state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null; renderMetrics(); renderVideos(); renderMaps(); renderSocial(); renderSourceNavigation(); renderSourceProgress(); renderLoading(false); return; }
-  state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null;
+  ["youtube", "maps", "social", "marketplace"].forEach(resetGroup);
+  if (!topicId) { state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null; state.marketplaceProducts = []; state.marketplaceStats = null; renderMetrics(); renderVideos(); renderMaps(); renderSocial(); renderMarketplace(); renderSourceNavigation(); renderSourceProgress(); renderLoading(false); return; }
+  state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null; state.marketplaceProducts = []; state.marketplaceStats = null;
   renderLoading(true); renderMetrics(); renderVideos(); renderMaps(); renderSocial(); renderSourceNavigation(); renderSourceProgress();
   const stillCurrent = () => requestId === trendRequestId && topicId === state.activeTopicId;
   const complete = (key, error = "") => { if (!stillCurrent()) return false; state.sourceStates[key] = { loading: false, loaded: !error, error }; renderSourceNavigation(); renderSourceProgress(); return true; };
   const loadGroup = async (key, work, apply) => {
-    try { const result = await work(); if (!stillCurrent()) return; apply(result); complete(key); if (key === "youtube") { renderMetrics(); renderVideos(); } else if (key === "maps") renderMaps(); else renderSocial(); renderSourceNavigation(); renderSourceProgress(); }
-    catch (error) { if (complete(key, error.message)) showToast(`${key === "social" ? "TikTok & Instagram" : key === "maps" ? "Google Maps" : "YouTube"} belum dapat dimuat: ${error.message}`); }
+    try { const result = await work(); if (!stillCurrent()) return; apply(result); complete(key); if (key === "youtube") { renderMetrics(); renderVideos(); } else if (key === "maps") renderMaps(); else if (key === "social") renderSocial(); else renderMarketplace(); renderSourceNavigation(); renderSourceProgress(); }
+    catch (error) { if (complete(key, error.message)) showToast(`${key === "social" ? "TikTok, Instagram & Facebook" : key === "maps" ? "Google Maps" : key === "marketplace" ? "Shopee" : "YouTube"} belum dapat dimuat: ${error.message}`); }
   };
   // Groups settle independently, so the first cached result can paint while slower sources refresh.
   await Promise.allSettled([
     loadGroup("youtube", () => Promise.all([api.trend(topicId), api.videos(topicId, videoSort, videoType)]), ([metrics, videoPayload]) => { state.metrics = metrics; state.videos = videoPayload.items || []; }),
     loadGroup("maps", () => Promise.all([api.mapsPlaces(topicId), api.mapsFeed(topicId)]), ([placesPayload, feedPayload]) => { state.mapsPlaces = placesPayload.items || []; state.mapsFeed = feedPayload.items || []; }),
     loadGroup("social", () => Promise.all([api.socialFeed(topicId), api.socialStats(topicId)]), ([socialPayload, socialStats]) => { state.socialPosts = socialPayload.items || []; state.socialStats = socialStats; }),
+    loadGroup("marketplace", () => Promise.all([api.marketplaceProducts(topicId), api.marketplaceStats(topicId)]), ([productPayload, stats]) => { state.marketplaceProducts = productPayload.items || []; state.marketplaceStats = stats; }),
   ]);
   if (stillCurrent()) { renderLoading(false); renderSourceNavigation(); renderSourceProgress(); }
 }
@@ -70,8 +71,8 @@ async function createTopic(event) {
   const payload = { name: $("topic-name").value.trim(), keywords: state.suggestion.keywords, product_terms: state.suggestion.product_terms, exclude_terms: state.suggestion.exclude_terms || [], category: $("topic-category").value, cities: [$("topic-city").value.trim()] };
   try {
     const topic = await api.createTopic(payload); closeDialog(); await loadTopics(topic.id); renderTopics();
-    state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null; state.sourceStates = { youtube: { loading: true, loaded: false, error: "" }, maps: { loading: true, loaded: false, error: "" }, social: { loading: true, loaded: false, error: "" } };
-    renderMetrics(); renderVideos(); renderMaps(); renderSocial(); renderSourceNavigation(); renderSourceProgress(); renderActiveSource();
+    state.metrics = null; state.videos = []; state.mapsPlaces = []; state.mapsFeed = []; state.socialPosts = []; state.socialStats = null; state.marketplaceProducts = []; state.marketplaceStats = null; state.sourceStates = { youtube: { loading: true, loaded: false, error: "" }, maps: { loading: true, loaded: false, error: "" }, social: { loading: true, loaded: false, error: "" }, marketplace: { loading: true, loaded: false, error: "" } };
+    renderMetrics(); renderVideos(); renderMaps(); renderSocial(); renderMarketplace(); renderSourceNavigation(); renderSourceProgress(); renderActiveSource();
     showBanner("discovering", `Menyiapkan sumber untuk “${topic.name}”. Data akan masuk bertahap tanpa mengosongkan dashboard.`);
     clearTimeout(topicRefreshTimer); topicRefreshTimer = setTimeout(async () => { await loadTopics(topic.id); await refreshTrend({ quiet: true }); }, 5000);
   } catch (error) { $("topic-error").textContent = error.message; $("topic-error").hidden = false; }
@@ -87,8 +88,8 @@ function connectStream() {
 }
 function bindControls() {
   $("topic-tabs").addEventListener("click", (event) => { const button = event.target.closest("button[data-topic-id]"); if (button) selectTopic(button.dataset.topicId); });
-  $("source-nav").addEventListener("click", (event) => { const button = event.target.closest("button[data-source]"); if (!button) return; state.activeSource = button.dataset.source; renderActiveSource(); renderSocial(); renderSourceNavigation(); renderSourceProgress(); });
-  $("overview-view").addEventListener("click", (event) => { const button = event.target.closest("button[data-source-jump]"); if (!button) return; state.activeSource = button.dataset.sourceJump; renderActiveSource(); renderSocial(); renderSourceNavigation(); renderSourceProgress(); });
+  $("source-nav").addEventListener("click", (event) => { const button = event.target.closest("button[data-source]"); if (!button) return; state.activeSource = button.dataset.source; renderActiveSource(); renderSocial(); renderMarketplace(); renderSourceNavigation(); renderSourceProgress(); });
+  $("overview-view").addEventListener("click", (event) => { const button = event.target.closest("button[data-source-jump]"); if (!button) return; state.activeSource = button.dataset.sourceJump; renderActiveSource(); renderSocial(); renderMarketplace(); renderSourceNavigation(); renderSourceProgress(); });
   $("add-topic-button").addEventListener("click", openDialog); $("close-dialog").addEventListener("click", closeDialog); $("cancel-topic").addEventListener("click", closeDialog); $("suggest-button").addEventListener("click", suggestTopic);
   $("topic-name").addEventListener("input", () => { state.suggestion = null; $("suggestion-box").hidden = true; $("save-topic").disabled = true; });
   $("topic-form").addEventListener("submit", createTopic); $("topic-dialog").addEventListener("click", (event) => { if (event.target === $("topic-dialog")) closeDialog(); });

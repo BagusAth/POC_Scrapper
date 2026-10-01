@@ -5,11 +5,13 @@ from fastapi import APIRouter
 from app.maps.usage import MapsUsageTracker
 from app.youtube.quota import QuotaTracker
 from app.social.usage import SocialUsageTracker
+from app.marketplace.usage import MarketplaceUsageTracker
 
 
 def create_usage_router(
     youtube: QuotaTracker, maps: MapsUsageTracker,
     social: SocialUsageTracker | None = None,
+    marketplace: MarketplaceUsageTracker | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["usage"])
 
@@ -20,6 +22,8 @@ def create_usage_router(
         }
         if social:
             payload["social"] = await social.status()
+        if marketplace:
+            payload["marketplace"] = await marketplace.status()
         return payload
 
     return router

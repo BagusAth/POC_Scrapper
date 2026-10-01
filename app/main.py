@@ -39,6 +39,9 @@ from app.social.usage import SocialUsageTracker
 from app.social.apify_client import SocialApifyClient
 from app.social.collector import SocialCollector
 from app.social.sentiment import SocialSentimentService
+from app.marketplace.usage import MarketplaceUsageTracker
+from app.marketplace.apify_client import ShopeeApifyClient
+from app.marketplace.collector import MarketplaceCollector
 from app.products import ProductCatalog
 from app.topics.service import TopicService
 from app.youtube.client import PublicYouTubeClient, YouTubeClient
@@ -98,6 +101,11 @@ def create_app(
         daily_cap=runtime.social_daily_run_cap,
         monthly_cap=runtime.social_monthly_run_cap,
     )
+    marketplace_usage = MarketplaceUsageTracker(
+        database,
+        daily_cap=runtime.marketplace_daily_run_cap,
+        monthly_cap=runtime.marketplace_monthly_run_cap,
+    )
     maps_client: ApifyMapsClient | None = None
     maps_collector: MapsCollector | None = None
     if (
@@ -122,6 +130,11 @@ def create_app(
         social_collector = SocialCollector(
             database, social_client, runtime, broker, social_sentiment
         )
+    marketplace_client: ShopeeApifyClient | None = None
+    marketplace_collector: MarketplaceCollector | None = None
+    if runtime.apify_token and "shopee" in runtime.active_sources:
+        marketplace_client = ShopeeApifyClient(runtime, marketplace_usage)
+        marketplace_collector = MarketplaceCollector(database, marketplace_client, runtime, broker)
     youtube_client: YouTubeClient | PublicYouTubeClient | None = None
     if "youtube_trend" in runtime.active_sources:
         youtube_client = (
@@ -155,7 +168,8 @@ def create_app(
         if youtube_client else None
     )
     trend_scheduler = TrendScheduler(
-        runtime, database, broker, discovery, snapshot, maps_collector, social_collector
+        runtime, database, broker, discovery, snapshot, maps_collector, social_collector,
+        marketplace_collector
     )
     topic_service = TopicService(database, runtime)
     summary_service = SummaryService(database, runtime, worker=worker, limiter=worker.limiter)
@@ -181,10 +195,13 @@ def create_app(
         application.state.youtube_quota = youtube_quota
         application.state.maps_usage = maps_usage
         application.state.social_usage = social_usage
+        application.state.marketplace_usage = marketplace_usage
         application.state.maps_client = maps_client
         application.state.maps_collector = maps_collector
         application.state.social_client = social_client
         application.state.social_collector = social_collector
+        application.state.marketplace_client = marketplace_client
+        application.state.marketplace_collector = marketplace_collector
         application.state.social_sentiment = social_sentiment
         application.state.analyzer_worker = worker
         try:
@@ -205,6 +222,8 @@ def create_app(
                 await maps_client.close()
             if social_client:
                 await social_client.close()
+            if marketplace_client:
+                await marketplace_client.close()
             await database.close()
 
     application = FastAPI(
@@ -233,7 +252,8 @@ def create_app(
         create_usage_router(
             youtube_quota,
             maps_usage,
-            social_usage if {"tiktok", "instagram"}.intersection(runtime.active_sources) else None,
+            social_usage if {"tiktok", "instagram", "facebook"}.intersection(runtime.active_sources) else None,
+            marketplace_usage if "shopee" in runtime.active_sources else None,
         )
     )
     application.include_router(
@@ -243,6 +263,8 @@ def create_app(
     application.include_router(create_maps_router(database))
     application.include_router(create_places_compat_router(database))
     application.include_router(create_social_router(database))
+    from app.api.routes_marketplace import create_marketplace_router
+    application.include_router(create_marketplace_router(database))
     application.include_router(create_stream_router(broker))
 
     # Transitional v2 endpoints remain available while Maps opinion work starts at M4.

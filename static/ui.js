@@ -32,37 +32,39 @@ export function renderHealth() {
   renderSourceNavigation();
 }
 
-const sourceNames = { overview: "Ringkasan", tiktok: "TikTok", instagram: "Instagram", maps: "Google Maps", youtube: "YouTube" };
+const sourceNames = { overview: "Ringkasan", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", maps: "Google Maps", youtube: "YouTube", shopee: "Shopee" };
 function sourceState(key) { return state.sourceStates?.[key] || { loading: false, loaded: false, error: "" }; }
 function socialPostsForSource(source = state.activeSource) {
   const posts = state.socialPosts || [];
-  return source === "tiktok" || source === "instagram" ? posts.filter((post) => post.platform === source) : posts;
+  return source === "tiktok" || source === "instagram" || source === "facebook" ? posts.filter((post) => post.platform === source) : posts;
 }
 export function renderSourceNavigation() {
-  const counts = { tiktok: socialPostsForSource("tiktok").length, instagram: socialPostsForSource("instagram").length, maps: (state.mapsPlaces || []).filter((place) => place.is_relevant).length + (state.mapsFeed || []).length, youtube: (state.videos || []).length };
-  ["tiktok", "instagram", "maps", "youtube"].forEach((key) => {
-    const button = document.querySelector(`#source-nav [data-source="${key}"]`); const dot = $(`source-status-${key}`); const count = $(`source-count-${key}`); const status = sourceState(key === "tiktok" || key === "instagram" ? "social" : key);
+  const counts = { tiktok: socialPostsForSource("tiktok").length, instagram: socialPostsForSource("instagram").length, facebook: socialPostsForSource("facebook").length, maps: (state.mapsPlaces || []).filter((place) => place.is_relevant).length + (state.mapsFeed || []).length, youtube: (state.videos || []).length, shopee: (state.marketplaceProducts || []).length };
+  ["tiktok", "instagram", "facebook", "maps", "youtube", "shopee"].forEach((key) => {
+    const button = document.querySelector(`#source-nav [data-source="${key}"]`); const dot = $(`source-status-${key}`); const count = $(`source-count-${key}`); const status = ["tiktok", "instagram", "facebook"].includes(key) ? sourceState("social") : key === "shopee" ? sourceState("marketplace") : sourceState(key);
     button?.classList.toggle("active", state.activeSource === key); button?.toggleAttribute("aria-current", state.activeSource === key); if (count) count.textContent = status.loading && !status.loaded ? "…" : String(counts[key]);
     if (dot) { dot.className = `source-status-dot ${status.loading ? "is-loading" : status.error ? "is-error" : status.loaded ? "is-live" : ""}`; dot.title = status.error || (status.loading ? "Refresh background berjalan" : status.loaded ? "Data tersedia" : "Menunggu data"); }
   });
-  const overview = $("source-status-overview"); if (overview) overview.className = `source-status-dot ${["youtube", "maps", "social"].some((key) => sourceState(key).loading) ? "is-loading" : "is-live"}`;
-  const socialState = sourceState("social"); const mapsState = sourceState("maps"); const youtubeState = sourceState("youtube");
+  const overview = $("source-status-overview"); if (overview) overview.className = `source-status-dot ${["youtube", "maps", "social", "marketplace"].some((key) => sourceState(key).loading) ? "is-loading" : "is-live"}`;
+  const socialState = sourceState("social"); const mapsState = sourceState("maps"); const youtubeState = sourceState("youtube"); const marketplaceState = sourceState("marketplace");
   const setSummary = (key, value, note) => { const valueEl = $(`overview-${key}-count`); const noteEl = $(`overview-${key}-note`); if (valueEl) valueEl.textContent = value; if (noteEl) noteEl.textContent = note; };
   setSummary("tiktok", socialState.loading && !socialState.loaded ? "…" : String(counts.tiktok), socialState.loading ? "Mengambil post" : counts.tiktok ? "post relevan" : "Belum ada post");
   setSummary("instagram", socialState.loading && !socialState.loaded ? "…" : String(counts.instagram), socialState.loading ? "Mengambil caption" : counts.instagram ? "post relevan" : "Belum ada post");
   setSummary("maps", mapsState.loading && !mapsState.loaded ? "…" : String(counts.maps), mapsState.loading ? "Mencari lokasi" : counts.maps ? "lokasi & ulasan" : "Belum ada ulasan");
   setSummary("youtube", youtubeState.loading && !youtubeState.loaded ? "…" : String(counts.youtube), youtubeState.loading ? "Mencari video" : counts.youtube ? "video relevan" : "Belum ada video");
+  setSummary("facebook", socialState.loading && !socialState.loaded ? "…" : String(counts.facebook), socialState.loading ? "Mengambil post" : counts.facebook ? "post relevan" : "Belum ada post");
+  setSummary("shopee", marketplaceState.loading && !marketplaceState.loaded ? "…" : String(counts.shopee), marketplaceState.loading ? "Mencari produk" : counts.shopee ? "produk relevan" : "Belum ada produk");
 }
 export function renderActiveSource() {
-  const source = state.activeSource; const view = source === "tiktok" || source === "instagram" ? "social" : source;
+  const source = state.activeSource; const view = source === "tiktok" || source === "instagram" || source === "facebook" ? "social" : source;
   document.querySelectorAll("[data-source-view]").forEach((element) => element.classList.toggle("is-active", element.dataset.sourceView === view));
   document.querySelectorAll("#source-nav [data-source]").forEach((button) => { const active = button.dataset.source === source; button.classList.toggle("active", active); if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current"); });
   const name = sourceNames[source] || sourceNames.overview; $("source-breadcrumb").textContent = `${name} · ${state.topics.find((topic) => topic.id === state.activeTopicId)?.name || "pilih produk"}`;
-  $("hero-source-badge").textContent = name; $("social-source-label").textContent = source === "tiktok" ? "Sentimen pasar · TikTok" : source === "instagram" ? "Sentimen pasar · Instagram" : "Sentimen pasar · TikTok & Instagram";
-  $("social-panel-title").textContent = source === "tiktok" ? "Video TikTok yang sedang ramai" : source === "instagram" ? "Caption Instagram yang sedang ramai" : "Suara pasar yang sedang ramai";
+  $("hero-source-badge").textContent = name; $("social-source-label").textContent = source === "tiktok" ? "Sentimen pasar · TikTok" : source === "instagram" ? "Sentimen pasar · Instagram" : source === "facebook" ? "Sentimen pasar · Facebook" : "Sentimen pasar · TikTok, Instagram & Facebook";
+  $("social-panel-title").textContent = source === "tiktok" ? "Video TikTok yang sedang ramai" : source === "instagram" ? "Caption Instagram yang sedang ramai" : source === "facebook" ? "Post Facebook yang sedang ramai" : "Suara pasar yang sedang ramai";
 }
 export function renderSourceProgress() {
-  const active = state.activeSource === "tiktok" || state.activeSource === "instagram" ? "social" : state.activeSource; const group = active === "overview" ? ["youtube", "maps", "social"] : [active]; const statuses = group.map(sourceState); const loading = statuses.some((status) => status.loading); const loaded = statuses.length > 0 && statuses.every((status) => status.loaded); const errors = statuses.find((status) => status.error);
+  const active = ["tiktok", "instagram", "facebook"].includes(state.activeSource) ? "social" : state.activeSource; const group = active === "overview" ? ["youtube", "maps", "social", "marketplace"] : [active]; const statuses = group.map(sourceState); const loading = statuses.some((status) => status.loading); const loaded = statuses.length > 0 && statuses.every((status) => status.loaded); const errors = statuses.find((status) => status.error);
   const topic = state.topics.find((item) => item.id === state.activeTopicId); const title = $("source-progress-title"); const copy = $("source-progress-copy"); const bar = $("source-progress-bar"); const percent = $("source-progress-percent"); const card = $("source-progress");
   if (loaded && !loading) { card.classList.add("is-loaded"); title.textContent = "Data tersimpan sudah tampil"; copy.textContent = "Refresh sumber tetap berjalan otomatis di background; dashboard tidak dikosongkan saat proses berlangsung."; bar.style.width = "100%"; percent.textContent = "Siap"; }
   else if (errors) { card.classList.remove("is-loaded"); title.textContent = "Sebagian sumber perlu dicoba lagi"; copy.textContent = `${errors.error}. Data dari sumber lain tetap bisa dibaca.`; bar.style.width = `${Math.max(18, Math.round((statuses.filter((status) => status.loaded).length / statuses.length) * 100))}%`; percent.textContent = "Perlu cek"; }
@@ -172,7 +174,7 @@ function renderSocialTrend(daily) {
 }
 export function renderSocial() {
   const posts = socialPostsForSource();
-  const baseStats = state.socialStats || {}; const sourceSpecific = state.activeSource === "tiktok" || state.activeSource === "instagram";
+  const baseStats = state.socialStats || {}; const sourceSpecific = ["tiktok", "instagram", "facebook"].includes(state.activeSource);
   const sentiment = baseStats.sentiment || {}; const positive = sourceSpecific ? posts.filter((post) => post.sentiment === "positif").length : Number(sentiment.positif || 0); const negative = sourceSpecific ? posts.filter((post) => post.sentiment === "negatif").length : Number(sentiment.negatif || 0); const neutral = sourceSpecific ? posts.filter((post) => post.sentiment === "netral").length : Number(sentiment.netral || 0); const pending = sourceSpecific ? posts.filter((post) => !post.sentiment || post.sentiment === "pending").length : Number(sentiment.pending || 0); const analyzed = positive + negative + neutral || Number(baseStats.analyzed_posts || 0);
   const sourceDaily = Object.values(posts.reduce((days, post) => { const key = post.published_at ? new Date(post.published_at).toISOString().slice(0, 10) : ""; if (!key) return days; const day = days[key] || { date: key, positif: 0, negatif: 0, netral: 0 }; if (post.sentiment === "positif" || post.sentiment === "negatif" || post.sentiment === "netral") day[post.sentiment] += 1; days[key] = day; return days; }, {}));
   const stats = sourceSpecific ? { ...baseStats, analyzed_posts: analyzed, positive_rate: analyzed ? positive / analyzed : 0, negative_rate: analyzed ? negative / analyzed : 0, dominant_sentiment: analyzed ? (positive >= negative && positive >= neutral ? "positif" : negative >= neutral ? "negatif" : "netral") : (pending ? "pending" : null), daily: sourceDaily } : baseStats;
@@ -185,14 +187,23 @@ export function renderSocial() {
   renderSocialTrend(stats.daily || []);
   $("social-empty").hidden = posts.length > 0;
   $("social-feed-list").innerHTML = posts.map((post) => {
-    const platform = post.platform === "tiktok" ? "TikTok" : "Instagram";
+    const platform = post.platform === "tiktok" ? "TikTok" : post.platform === "instagram" ? "Instagram" : "Facebook";
     const metrics = [post.views == null ? null : `▶ ${number.format(post.views)}`, post.likes == null ? null : `♥ ${number.format(post.likes)}`, post.comments == null ? null : `◌ ${number.format(post.comments)}`].filter(Boolean).join(" · ");
     const sentimentLabel = { positif: "Positif", negatif: "Negatif", netral: "Netral", pending: "Belum dianalisis" }[post.sentiment || "pending"] || "Belum dianalisis";
     return `<article class="social-feed-item"><div class="social-feed-meta"><span class="social-platform">${platform}</span><time>${post.published_at ? date.format(new Date(post.published_at)) : "Baru"}</time></div><p class="social-feed-author">${escapeHtml(post.author_name || "Akun publik")}</p><p class="social-feed-text">${escapeHtml(post.text)}</p><span class="social-sentiment-badge ${escapeHtml(post.sentiment || "pending")}">${sentimentLabel}</span><p class="social-feed-metrics">${escapeHtml(metrics || "Tanpa metrik")}</p>${post.url ? `<a class="social-feed-link" href="${escapeHtml(post.url)}" target="_blank" rel="noopener">Buka post ↗</a>` : ""}</article>`;
   }).join("");
   const socialState = sourceState("social"); const emptyCopy = $("social-empty")?.querySelector("span"); if (!posts.length && emptyCopy) emptyCopy.textContent = socialState.loading ? "Data tersimpan sedang dibaca; pengambilan baru berjalan di background." : socialState.error ? "Feed sosial gagal dimuat. Coba refresh setelah konfigurasi diperiksa." : "Belum ada post relevan untuk sumber ini.";
-  const sourceLabel = state.activeSource === "tiktok" ? "TikTok" : state.activeSource === "instagram" ? "Instagram" : "TikTok & Instagram";
+  const sourceLabel = state.activeSource === "tiktok" ? "TikTok" : state.activeSource === "instagram" ? "Instagram" : state.activeSource === "facebook" ? "Facebook" : "TikTok, Instagram & Facebook";
   $("social-source-note").textContent = `Sumber: ${sourceLabel} melalui Apify · ${posts.length} post relevan · sentiment dihitung dalam konteks Bahasa Indonesia`;
+}
+export function renderMarketplace() {
+  const products = state.marketplaceProducts || []; const stats = state.marketplaceStats || {};
+  $("marketplace-count-badge").textContent = `${products.length} produk`;
+  $("marketplace-product-body").innerHTML = products.map((product) => `<tr><td><a class="marketplace-product-title" href="${escapeHtml(product.url || "#")}" target="_blank" rel="noopener"><span>${escapeHtml(product.title)}</span><small>${escapeHtml(product.shop_name || "Penjual Shopee")}</small></a></td><td>${product.price == null ? "—" : `Rp ${fullNumber.format(Math.round(Number(product.price)))}`}</td><td class="numeric">${product.rating == null ? "—" : Number(product.rating).toFixed(1)}</td><td class="numeric">${product.sold_count == null ? "—" : fullNumber.format(product.sold_count)}</td><td class="numeric">${product.rating_count == null ? "—" : fullNumber.format(product.rating_count)}</td></tr>`).join("");
+  $("marketplace-empty").hidden = products.length > 0;
+  $("marketplace-total-products").textContent = fullNumber.format(Number(stats.products || 0)); $("marketplace-total-sold").textContent = fullNumber.format(Number(stats.sold_count || 0)); $("marketplace-average-rating").textContent = stats.average_rating == null ? "—" : Number(stats.average_rating).toFixed(1); $("marketplace-price-range").textContent = stats.min_price == null ? "—" : `Rp ${fullNumber.format(Math.round(stats.min_price))}–${fullNumber.format(Math.round(stats.max_price || stats.min_price))}`;
+  const marketplaceState = sourceState("marketplace"); const copy = $("marketplace-empty")?.querySelector("span"); if (!products.length && copy) copy.textContent = marketplaceState.loading ? "Snapshot Shopee sedang dibaca; pencarian baru berjalan di background." : marketplaceState.error ? "Feed Shopee gagal dimuat. Periksa Actor atau kuota Apify." : "Belum ada produk Shopee yang cocok dengan kata kunci produk.";
+  $("marketplace-source-note").textContent = `Sumber: Shopee melalui Apify · ${products.length} produk relevan · max ${state.health?.marketplace_results_per_query || "30"} hasil per run`;
 }
 let toastTimer;
 export function showToast(message) { const toast = $("toast"); toast.textContent = message; toast.classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("visible"), 4200); }

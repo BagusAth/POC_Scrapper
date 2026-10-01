@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     # favor broad post coverage without paid media downloads or comments.
     tiktok_actor_id: str = "clockworks~tiktok-scraper"
     instagram_actor_id: str = "apify~instagram-scraper"
+    facebook_actor_id: str = "apify~facebook-search-scraper"
     social_results_per_query: int = 50
     social_max_queries_per_topic: int = 3
     social_lookback_days: int = 30
@@ -73,6 +74,14 @@ class Settings(BaseSettings):
     social_monthly_run_cap: int = 300
     social_comments_enabled: bool = False
     social_sentiment_enabled: bool = True
+
+    # Marketplace discovery is intentionally one keyword run per topic. This
+    # keeps Shopee useful for trend signals while preserving the Apify budget.
+    shopee_actor_id: str = "xtracto~shopee-scraper"
+    marketplace_results_per_query: int = 30
+    marketplace_refresh_hours: float = 12.0
+    marketplace_daily_run_cap: int = 8
+    marketplace_monthly_run_cap: int = 200
 
     demo_mode: bool = False
     demo_stats_interval_seconds: float = 120.0
@@ -122,6 +131,7 @@ class Settings(BaseSettings):
         "maps_daily_request_cap", "maps_monthly_request_cap", "maps_content_ttl_days",
         "social_results_per_query", "social_max_queries_per_topic",
         "social_lookback_days", "social_daily_run_cap", "social_monthly_run_cap",
+        "marketplace_results_per_query", "marketplace_daily_run_cap", "marketplace_monthly_run_cap",
         "demo_budget_units", "max_active_topics", "gemini_rpm", "batch_size",
         "max_gemini_failures", "summary_min_reviews", "max_comment_chars",
         "comment_max_age_days",
@@ -136,7 +146,7 @@ class Settings(BaseSettings):
         "replay_interval_seconds", "yt_search_refresh_hours", "yt_stats_interval_minutes",
         "youtube_http_timeout_seconds", "maps_refresh_hours",
         "apify_poll_interval_seconds", "apify_poll_timeout_seconds",
-        "social_refresh_hours",
+        "social_refresh_hours", "marketplace_refresh_hours",
         "demo_stats_interval_seconds", "batch_max_wait_seconds",
         "collect_interval_seconds",
     )
@@ -157,7 +167,7 @@ class Settings(BaseSettings):
     def active_sources(self) -> list[str]:
         aliases = {
             "youtube": "youtube_trend", "gmaps": "maps",
-            "ig": "instagram", "tiktok_trend": "tiktok",
+            "ig": "instagram", "tiktok_trend": "tiktok", "fb": "facebook",
         }
         values = (
             aliases.get(part.strip().lower(), part.strip().lower())

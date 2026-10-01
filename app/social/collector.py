@@ -43,7 +43,7 @@ class SocialCollector:
         completed = 0
         errors: list[Exception] = []
         platforms: list[Platform] = [
-            platform for platform in ("tiktok", "instagram")
+            platform for platform in ("tiktok", "instagram", "facebook")
             if platform in self.settings.active_sources
         ]
         for platform in platforms:

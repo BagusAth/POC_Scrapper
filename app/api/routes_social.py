@@ -15,7 +15,7 @@ def create_social_router(database: Database) -> APIRouter:
     @router.get("/feed")
     async def feed(
         topic_id: str,
-        platform: Literal["tiktok", "instagram"] | None = None,
+        platform: Literal["tiktok", "instagram", "facebook"] | None = None,
         limit: int = Query(default=100, ge=1, le=500),
     ) -> dict[str, object]:
         if await database.get_topic(topic_id) is None:

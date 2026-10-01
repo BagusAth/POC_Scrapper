@@ -12,6 +12,7 @@ from app.events import EventBroker
 from app.maps.collector import MapsCollector
 from app.models import Topic
 from app.social.collector import SocialCollector
+from app.marketplace.collector import MarketplaceCollector
 
 from .stats_snapshot import StatsSnapshotService
 from .trend_discovery import TrendDiscovery
@@ -25,6 +26,7 @@ class TrendScheduler:
         discovery: TrendDiscovery | None, snapshot: StatsSnapshotService | None,
         maps_collector: MapsCollector | None = None,
         social_collector: SocialCollector | None = None,
+        marketplace_collector: MarketplaceCollector | None = None,
     ) -> None:
         self.settings = settings
         self.database = database
@@ -33,6 +35,7 @@ class TrendScheduler:
         self.snapshot = snapshot
         self.maps_collector = maps_collector
         self.social_collector = social_collector
+        self.marketplace_collector = marketplace_collector
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
         self._locks: dict[str, asyncio.Lock] = {}
@@ -42,9 +45,10 @@ class TrendScheduler:
         youtube_active = self.discovery is not None and "youtube_trend" in self.settings.active_sources
         maps_active = self.maps_collector is not None and "maps" in self.settings.active_sources
         social_active = self.social_collector is not None and bool(
-            {"tiktok", "instagram"}.intersection(self.settings.active_sources)
+            {"tiktok", "instagram", "facebook"}.intersection(self.settings.active_sources)
         )
-        return bool(youtube_active or maps_active or social_active)
+        marketplace_active = self.marketplace_collector is not None and "shopee" in self.settings.active_sources
+        return bool(youtube_active or maps_active or social_active or marketplace_active)
 
     def start(self) -> None:
         if self.active and self._task is None:
@@ -62,7 +66,8 @@ class TrendScheduler:
         if not (
             (self.discovery and self.snapshot and "youtube_trend" in self.settings.active_sources)
             or (self.maps_collector and "maps" in self.settings.active_sources)
-            or (self.social_collector and {"tiktok", "instagram"}.intersection(self.settings.active_sources))
+            or (self.social_collector and {"tiktok", "instagram", "facebook"}.intersection(self.settings.active_sources))
+            or (self.marketplace_collector and "shopee" in self.settings.active_sources)
         ):
             return
         lock = self._locks.setdefault(topic.id, asyncio.Lock())
@@ -95,7 +100,7 @@ class TrendScheduler:
                         "topic_id": topic.id, "status": "limited", "source": "maps_apify",
                         "message": str(exc), "counts": {"relevant_places": 0, "new_reviews": 0},
                     })
-            if self.social_collector and {"tiktok", "instagram"}.intersection(self.settings.active_sources):
+            if self.social_collector and {"tiktok", "instagram", "facebook"}.intersection(self.settings.active_sources):
                 try:
                     await self.social_collector.refresh_topic(topic)
                 except Exception as exc:
@@ -103,6 +108,15 @@ class TrendScheduler:
                     await self.broker.publish("social_status", {
                         "topic_id": topic.id, "status": "limited", "source": "apify_social",
                         "message": str(exc), "counts": {"relevant_posts": 0, "new_posts": 0},
+                    })
+            if self.marketplace_collector and "shopee" in self.settings.active_sources:
+                try:
+                    await self.marketplace_collector.refresh_topic(topic)
+                except Exception as exc:
+                    logger.exception("Refresh Shopee gagal untuk %s", topic.id)
+                    await self.broker.publish("marketplace_status", {
+                        "topic_id": topic.id, "status": "limited", "source": "apify_shopee",
+                        "message": str(exc), "counts": {"products": 0, "new_products": 0},
                     })
 
     async def run(self) -> None:
@@ -129,14 +143,18 @@ class TrendScheduler:
                 )
                 social_stale = False
                 if self.social_collector:
-                    for platform in ("tiktok", "instagram"):
+                    for platform in ("tiktok", "instagram", "facebook"):
                         if platform not in self.settings.active_sources:
                             continue
                         last_social = await self.database.get_social_last_refresh(topic.id, platform)
                         if last_social is None or last_social <= now - timedelta(hours=self.settings.social_refresh_hours):
                             social_stale = True
                             break
-                if (self.discovery and yt_stale) or maps_stale or social_stale:
+                marketplace_stale = False
+                if self.marketplace_collector and "shopee" in self.settings.active_sources:
+                    last_marketplace = await self.database.get_marketplace_last_refresh(topic.id, "shopee")
+                    marketplace_stale = last_marketplace is None or last_marketplace <= now - timedelta(hours=self.settings.marketplace_refresh_hours)
+                if (self.discovery and yt_stale) or maps_stale or social_stale or marketplace_stale:
                     await self.discover_topic(topic)
                     continue
                 if self.snapshot:

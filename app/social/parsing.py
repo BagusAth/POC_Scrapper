@@ -94,7 +94,7 @@ def parse_social_items(
             comments = _int(item.get("commentCount") or item.get("comments"))
             shares = _int(item.get("shareCount") or item.get("shares"))
             query = _text(item.get("searchQuery")) or None
-        else:
+        elif platform == "instagram":
             owner = item.get("owner") or item.get("ownerMeta") or {}
             author_name = (
                 _text(item.get("ownerUsername") or owner.get("username") or owner.get("fullName")) or None
@@ -123,6 +123,22 @@ def parse_social_items(
             comments = _int(comment_value)
             shares = _int(item.get("sharesCount") or item.get("shares"))
             query = _text(item.get("sourceHashtag") or item.get("search")) or None
+        else:
+            author = item.get("author") or item.get("owner") or item.get("page") or {}
+            author_name = (
+                _text(item.get("authorName") or item.get("userName") or item.get("pageName") or author.get("name") or author.get("username")) or None
+                if isinstance(author, dict) else _text(item.get("authorName") or item.get("userName")) or None
+            )
+            post_id = _text(item.get("postId") or item.get("post_id") or item.get("id") or item.get("legacyId"))
+            text = _text(item.get("text") or item.get("postText") or item.get("message") or item.get("description"))
+            url = _text(item.get("url") or item.get("postUrl") or item.get("post_url")) or None
+            author_url = _text(item.get("authorUrl") or author.get("url") or author.get("profileUrl")) or None if isinstance(author, dict) else None
+            published = item.get("publishedAt") or item.get("published_at") or item.get("timestamp") or item.get("time") or item.get("date")
+            views = _int(item.get("views") or item.get("videoViews") or item.get("viewCount"))
+            likes = _int(item.get("likes") or item.get("likesCount") or item.get("reactionCount"))
+            comments = _int(item.get("comments") or item.get("commentsCount") or item.get("commentCount"))
+            shares = _int(item.get("shares") or item.get("sharesCount") or item.get("shareCount"))
+            query = _text(item.get("searchQuery") or item.get("query") or item.get("category")) or None
         if not post_id or not text:
             continue
         output.append(SocialPost(

@@ -26,7 +26,7 @@ class SocialUsageTracker:
         return value.astimezone(timezone.utc).date().isoformat()
 
     async def consume(self, platform: str, *, now: datetime | None = None) -> int:
-        if platform not in {"tiktok", "instagram"}:
+        if platform not in {"tiktok", "instagram", "facebook"}:
             raise ValueError("Platform sosial tidak valid")
         day = self.day(now)
         rows = await self.database.usage_rows("social_")
@@ -51,7 +51,7 @@ class SocialUsageTracker:
                 for row in daily_rows
                 if row["api"] == f"social_{platform}_run"
             )
-            for platform in ("tiktok", "instagram")
+            for platform in ("tiktok", "instagram", "facebook")
         }
         daily = sum(int(row["units"]) for row in daily_rows)
         monthly = sum(int(row["units"]) for row in monthly_rows)

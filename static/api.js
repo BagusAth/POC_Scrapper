@@ -19,4 +19,6 @@ export const api = {
   mapsFeed: (topicId, limit = 30) => request(`/api/maps/feed?${query({ topic_id: topicId, limit })}`),
   socialFeed: (topicId, platform, limit = 100) => request(`/api/social/feed?${query({ topic_id: topicId, platform, limit })}`),
   socialStats: (topicId) => request(`/api/social/stats?${query({ topic_id: topicId })}`),
+  marketplaceProducts: (topicId, platform = "shopee", limit = 100) => request(`/api/marketplace/products?${query({ topic_id: topicId, platform, limit })}`),
+  marketplaceStats: (topicId, platform = "shopee") => request(`/api/marketplace/stats?${query({ topic_id: topicId, platform })}`),
 };

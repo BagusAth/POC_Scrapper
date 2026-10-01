@@ -62,6 +62,12 @@ def create_health_router(
             "instagram_configured": bool(
                 settings.apify_token and "instagram" in sources
             ),
+            "facebook_configured": bool(
+                settings.apify_token and "facebook" in sources
+            ),
+            "shopee_configured": bool(
+                settings.apify_token and "shopee" in sources
+            ),
             "max_active_topics": settings.max_active_topics,
             "social_sentiment_enabled": settings.social_sentiment_enabled,
             "social_sentiment_analyzer": analyzer.get("active_analyzer", settings.ai_mode),
@@ -92,6 +98,16 @@ def create_health_router(
                     f"Instagram Apify aktif ({settings.instagram_actor_id})"
                     if settings.apify_token and "instagram" in sources
                     else "Instagram Apify belum dikonfigurasi"
+                ),
+                "facebook": (
+                    f"Facebook Apify aktif ({settings.facebook_actor_id})"
+                    if settings.apify_token and "facebook" in sources
+                    else "Facebook Apify belum dikonfigurasi"
+                ),
+                "shopee": (
+                    f"Shopee Apify aktif ({settings.shopee_actor_id})"
+                    if settings.apify_token and "shopee" in sources
+                    else "Shopee Apify belum dikonfigurasi"
                 ),
             },
         }

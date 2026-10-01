@@ -160,6 +160,35 @@ CREATE TABLE IF NOT EXISTS social_refreshes (
     refreshed_at TEXT NOT NULL,
     PRIMARY KEY (topic_id, platform)
 );
+CREATE TABLE IF NOT EXISTS marketplace_products (
+    platform TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    topic_id TEXT NOT NULL REFERENCES topics(id),
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    url TEXT,
+    shop_name TEXT,
+    category TEXT,
+    price REAL,
+    original_price REAL,
+    rating REAL,
+    rating_count INTEGER,
+    sold_count INTEGER,
+    stock INTEGER,
+    image_url TEXT,
+    query TEXT,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    PRIMARY KEY (platform, product_id, topic_id)
+);
+CREATE INDEX IF NOT EXISTS idx_marketplace_products_topic
+    ON marketplace_products(topic_id, platform, last_seen_at DESC);
+CREATE TABLE IF NOT EXISTS marketplace_refreshes (
+    topic_id TEXT NOT NULL REFERENCES topics(id),
+    platform TEXT NOT NULL,
+    refreshed_at TEXT NOT NULL,
+    PRIMARY KEY (topic_id, platform)
+);
 CREATE TABLE IF NOT EXISTS api_usage (
     day TEXT NOT NULL,
     api TEXT NOT NULL,
@@ -547,6 +576,83 @@ class Database:
         )
         row = await cursor.fetchone()
         return from_iso(row[0]) if row else None
+
+    async def upsert_marketplace_product(
+        self, *, platform: str, product_id: str, topic_id: str, title: str,
+        description: str, url: str | None, shop_name: str | None,
+        category: str | None, price: float | None, original_price: float | None,
+        rating: float | None, rating_count: int | None, sold_count: int | None,
+        stock: int | None, image_url: str | None, query: str | None,
+        seen_at: datetime,
+    ) -> bool:
+        timestamp = to_utc_iso(seen_at)
+        existing = await self._conn().execute(
+            "SELECT 1 FROM marketplace_products WHERE platform=? AND product_id=? AND topic_id=?",
+            (platform, product_id, topic_id),
+        )
+        is_new = await existing.fetchone() is None
+        cursor = await self._conn().execute(
+            """INSERT INTO marketplace_products
+               (platform,product_id,topic_id,title,description,url,shop_name,category,
+                price,original_price,rating,rating_count,sold_count,stock,image_url,query,
+                first_seen_at,last_seen_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(platform,product_id,topic_id) DO UPDATE SET
+                title=excluded.title,description=excluded.description,url=excluded.url,
+                shop_name=excluded.shop_name,category=excluded.category,price=excluded.price,
+                original_price=excluded.original_price,rating=excluded.rating,
+                rating_count=excluded.rating_count,sold_count=excluded.sold_count,
+                stock=excluded.stock,image_url=excluded.image_url,query=excluded.query,
+                last_seen_at=excluded.last_seen_at""",
+            (platform, product_id, topic_id, title, description, url, shop_name, category,
+             price, original_price, rating, rating_count, sold_count, stock, image_url,
+             query, timestamp, timestamp),
+        )
+        await self._conn().commit()
+        return is_new and cursor.rowcount == 1
+
+    async def update_marketplace_refresh(self, topic_id: str, platform: str, refreshed_at: datetime) -> None:
+        await self._conn().execute(
+            """INSERT INTO marketplace_refreshes(topic_id,platform,refreshed_at) VALUES (?,?,?)
+               ON CONFLICT(topic_id,platform) DO UPDATE SET refreshed_at=excluded.refreshed_at""",
+            (topic_id, platform, to_utc_iso(refreshed_at)),
+        )
+        await self._conn().commit()
+
+    async def get_marketplace_last_refresh(self, topic_id: str, platform: str) -> datetime | None:
+        cursor = await self._conn().execute(
+            "SELECT refreshed_at FROM marketplace_refreshes WHERE topic_id=? AND platform=?",
+            (topic_id, platform),
+        )
+        row = await cursor.fetchone()
+        return from_iso(row[0]) if row else None
+
+    async def list_marketplace_products(self, topic_id: str, *, platform: str = "shopee", limit: int = 100) -> list[dict[str, Any]]:
+        cursor = await self._conn().execute(
+            """SELECT * FROM marketplace_products WHERE topic_id=? AND platform=?
+               ORDER BY COALESCE(sold_count,0) DESC, COALESCE(rating,0) DESC, last_seen_at DESC LIMIT ?""",
+            (topic_id, platform, min(max(limit, 1), 500)),
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+    async def marketplace_stats(self, topic_id: str, *, platform: str = "shopee") -> dict[str, Any]:
+        cursor = await self._conn().execute(
+            """SELECT COUNT(*) AS products, COALESCE(SUM(sold_count),0) AS sold_count,
+                      AVG(rating) AS average_rating, COALESCE(SUM(rating_count),0) AS rating_count,
+                      MIN(price) AS min_price, MAX(price) AS max_price
+               FROM marketplace_products WHERE topic_id=? AND platform=?""",
+            (topic_id, platform),
+        )
+        row = await cursor.fetchone()
+        data = dict(row) if row else {}
+        return {
+            "platform": platform, "products": int(data.get("products") or 0),
+            "sold_count": int(data.get("sold_count") or 0),
+            "average_rating": round(float(data["average_rating"]), 2) if data.get("average_rating") is not None else None,
+            "rating_count": int(data.get("rating_count") or 0),
+            "min_price": float(data["min_price"]) if data.get("min_price") is not None else None,
+            "max_price": float(data["max_price"]) if data.get("max_price") is not None else None,
+        }
 
     async def list_pending_social_posts(
         self, topic_id: str | None = None, *, limit: int = 25

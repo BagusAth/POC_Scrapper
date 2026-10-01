@@ -86,6 +86,21 @@ def test_instagram_input_and_social_parser() -> None:
     assert posts[0].likes == 23
 
 
+def test_facebook_keyword_input_and_parser() -> None:
+    settings = Settings(_env_file=None, apify_token="x", social_results_per_query=25)
+    client = SocialApifyClient(settings, SocialUsageTracker(Database(":memory:")))
+    payload = client.build_input("facebook", topic())
+    assert payload["categories"] == ["sepatu lokal", "sneakers lokal", "sepatu"]
+    assert payload["searchType"] == "posts"
+    posts = parse_social_items("facebook", [{
+        "postId": "fb-1", "postText": "Sepatu lokal nyaman untuk harian",
+        "publishedAt": "2026-09-30T00:00:00Z", "authorName": "UMKM Bandung",
+        "likes": 12, "comments": 3, "shares": 2, "url": "https://facebook.com/p/1",
+    }], topic())
+    assert posts[0].mentions_product is True
+    assert posts[0].shares == 2
+
+
 @pytest.mark.asyncio
 async def test_social_sentiment_is_persisted_and_aggregated(tmp_path: Path) -> None:
     db = Database(tmp_path / "social-sentiment.db")

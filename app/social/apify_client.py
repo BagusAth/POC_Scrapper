@@ -27,7 +27,7 @@ APIFY_API_ROOT = "https://api.apify.com/v2"
 TERMINAL_STATUSES = {
     "SUCCEEDED", "FAILED", "TIMING-OUT", "TIMED-OUT", "ABORTED", "ABORTING",
 }
-Platform = Literal["tiktok", "instagram"]
+Platform = Literal["tiktok", "instagram", "facebook"]
 
 
 @dataclass(frozen=True)
@@ -58,7 +58,11 @@ class SocialApifyClient:
         self._owns_client = client is None
 
     def actor_id(self, platform: Platform) -> str:
-        return self.settings.tiktok_actor_id if platform == "tiktok" else self.settings.instagram_actor_id
+        if platform == "tiktok":
+            return self.settings.tiktok_actor_id
+        if platform == "instagram":
+            return self.settings.instagram_actor_id
+        return self.settings.facebook_actor_id
 
     def queries_for(self, topic: Topic) -> list[str]:
         values = [*topic.keywords, *topic.product_terms, topic.name]
@@ -102,6 +106,13 @@ class SocialApifyClient:
                 "aiVideoDescription": False,
                 "aiVideoSummary": False,
                 "proxyCountryCode": "ID",
+            }
+        if platform == "facebook":
+            return {
+                "categories": queries,
+                "locations": topic.cities[:1],
+                "searchType": "posts",
+                "resultsLimit": limit,
             }
         tags = [
             "https://www.instagram.com/explore/tags/"
