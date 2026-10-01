@@ -23,6 +23,10 @@ uvicorn app.main:app --reload
 
 Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Tiga topik awal tersedia: Cappuccino Cincau, Kopi Susu Gula Aren, dan Seblak. Tombol **Pantau produk** menerima produk lain seperti keripik pisang, parfum lokal, atau es teh jumbo; tidak ada kata kunci yang dikunci ke “sepatu”.
 
+### Deploy ke Vercel (POC)
+
+Vercel mengenali `index.py` sebagai entrypoint FastAPI. Deploy dari root repo dengan `npx vercel --prod`, lalu isi Environment Variables `APIFY_TOKEN`, `SOURCES=youtube_trend,maps,tiktok,instagram`, dan `DATABASE_PATH=/tmp/umkm-poc.db` pada project Vercel. Filesystem `/tmp` bersifat sementara pada serverless; gunakan database eksternal sebelum mengandalkan riwayat lintas instance.
+
 ## Data live dan kejujuran sumber
 
 Dashboard tidak memakai data demo untuk Panel A.

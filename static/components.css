@@ -44,7 +44,15 @@
 .topic-banner.is-warning { border-color: rgb(239 183 93 / 40%); background: rgb(239 183 93 / 9%); }
 .banner-spinner { width: 14px; height: 14px; flex: 0 0 auto; border: 2px solid rgb(131 230 167 / 25%); border-top-color: var(--mint); border-radius: 50%; animation: spin .8s linear infinite; }
 
-#trend-main { overflow: hidden; border-radius: 24px; background: var(--paper); box-shadow: var(--shadow); transition: opacity .2s; }
+#trend-main { display: flex; flex-direction: column; overflow: hidden; border-radius: 24px; background: var(--paper); box-shadow: var(--shadow); transition: opacity .2s; }
+#trend-main > * { width: 100%; }
+#trend-main > .hero-row { order: 1; }
+#trend-main > .social-panel { order: 2; }
+#trend-main > .maps-preview { order: 3; }
+#trend-main > .maps-panel { order: 4; }
+#trend-main > .kpi-grid { order: 5; }
+#trend-main > .charts-grid { order: 6; }
+#trend-main > .video-panel { order: 7; }
 #trend-main.is-loading { opacity: .68; }
 .hero-row { display: flex; min-height: 152px; align-items: flex-end; justify-content: space-between; gap: 28px; padding: 36px 40px 28px; }
 .hero-kicker { margin-bottom: 11px; color: var(--muted); font-size: 10px; font-weight: 780; letter-spacing: .08em; text-transform: uppercase; }

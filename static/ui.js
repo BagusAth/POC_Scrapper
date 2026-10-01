@@ -52,7 +52,7 @@ export function renderTopics() {
   const cap = Number(state.health?.max_active_topics || 20); $("topic-cap-note").textContent = `${state.topics.length}/${cap} aktif`;
   const topic = state.topics.find((item) => item.id === state.activeTopicId);
   $("topic-title").textContent = topic ? `Apa yang terjadi pada “${topic.name}”?` : "Pilih produk untuk melihat tren";
-  $("topic-subtitle").textContent = topic ? `Sinyal dihitung hanya dari video yang menyebut produk terkait · target ${topic.cities.join(", ")}` : "Tambahkan produk UMKM untuk memulai pemantauan YouTube secara live.";
+  $("topic-subtitle").textContent = topic ? `Sentimen sosial, opini lokasi, dan tren video untuk produk terkait · target ${topic.cities.join(", ")}` : "Tambahkan produk UMKM untuk memulai pemantauan sumber data secara live.";
   if (topic?.status === "discovering") showBanner("discovering", `Penelusuran YouTube untuk “${topic.name}” sedang berjalan.`);
   else if (topic?.status === "limited" && !topic.videos_tracked) showBanner("limited", "Belum menemukan video yang cukup relevan. Coba kata produk yang lebih spesifik.");
   else $("topic-banner").hidden = true;
