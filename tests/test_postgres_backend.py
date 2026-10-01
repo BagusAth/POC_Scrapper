@@ -35,6 +35,7 @@ def test_database_backend_auto_configuration() -> None:
     )
     assert settings.database_backend == "auto"
     assert settings.supabase_db_url.startswith("postgresql://")
+    assert settings.database_auto_migrate is False
 
 
 @pytest.mark.asyncio

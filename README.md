@@ -33,6 +33,8 @@ Repo ini menyertakan `.mcp.json` untuk Supabase MCP yang dibatasi ke project `it
 
 MCP dipakai untuk pengelolaan dan inspeksi, bukan sebagai koneksi runtime scraper. Runtime memakai `SUPABASE_DB_URL` hanya di server. Tabel dibuat di schema privat `scraper`, sehingga tidak diekspos ke Data API `public`.
 
+Migration dijalankan melalui Supabase MCP/CLI. `DATABASE_AUTO_MIGRATE` harus tetap `false` di Vercel agar cold start paralel tidak menjalankan DDL yang sama secara bersamaan.
+
 Backup SQLite yang ada ke Supabase bersifat additive dan transactional:
 
 ```bash
@@ -112,6 +114,7 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 | `MAX_ACTIVE_TOPICS` | `20` | Batas topik aktif |
 | `DATABASE_BACKEND` | `auto` | Memakai Postgres bila `SUPABASE_DB_URL` tersedia, selain itu SQLite |
 | `SUPABASE_DB_URL` | kosong | Connection string Supabase server-side untuk data persisten |
+| `DATABASE_AUTO_MIGRATE` | `false` | Bootstrap schema dari aplikasi; wajib false pada serverless production |
 | `DATABASE_PATH` | `data/app.db` | SQLite lokal |
 
 Saat `VIDEO_CLASSIFIER=auto` dan `GEMINI_API_KEY` tersedia, maksimal 50 judul diklasifikasikan per request menjadi `review`, `resep`, `ide_usaha`, atau `lainnya`. Judul diperlakukan sebagai data, request melewati rate limiter bersama, dan kegagalan selalu jatuh ke aturan lokal.

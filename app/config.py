@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     # exposed to the browser.
     database_backend: Literal["auto", "sqlite", "postgres"] = "auto"
     supabase_db_url: str = ""
+    # Schema changes are deployed through Supabase migrations. Keep runtime DDL
+    # disabled on serverless to avoid concurrent catalog updates on cold starts.
+    database_auto_migrate: bool = False
     topics_path: Path = Path("config/topics.json")
     aspects_path: Path = Path("config/aspects.json")
     replay_reviews_path: Path = Path("data/replay_reviews.csv")

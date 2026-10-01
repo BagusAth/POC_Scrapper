@@ -66,7 +66,9 @@ def create_app(
                 "DATABASE_BACKEND=postgres membutuhkan SUPABASE_DB_URL"
             )
         database: Database = PostgresDatabase(
-            runtime.supabase_db_url, comment_max_age_days=runtime.comment_max_age_days
+            runtime.supabase_db_url,
+            comment_max_age_days=runtime.comment_max_age_days,
+            auto_migrate=runtime.database_auto_migrate,
         )
     else:
         database = Database(

@@ -330,11 +330,18 @@ class _PoolConnection:
 class PostgresDatabase(Database):
     """Database implementation backed by the Supabase Postgres pooler."""
 
-    def __init__(self, dsn: str, *, comment_max_age_days: int = 180) -> None:
+    def __init__(
+        self,
+        dsn: str,
+        *,
+        comment_max_age_days: int = 180,
+        auto_migrate: bool = False,
+    ) -> None:
         # Do not pass the secret DSN to the SQLite base constructor or expose it
         # through ``path`` in diagnostics.
         super().__init__(":memory:", comment_max_age_days=comment_max_age_days)
         self._dsn = dsn
+        self.auto_migrate = auto_migrate
         self._pool: Any | None = None
         self._adapter: _PoolConnection | None = None
 
@@ -358,12 +365,13 @@ class PostgresDatabase(Database):
                 "application_name": "umkm-poc-scraper",
             },
         )
-        try:
-            await self._pool.execute(POSTGRES_SCHEMA)
-        except Exception:
-            await self._pool.close()
-            self._pool = None
-            raise
+        if self.auto_migrate:
+            try:
+                await self._pool.execute(POSTGRES_SCHEMA)
+            except Exception:
+                await self._pool.close()
+                self._pool = None
+                raise
         self._adapter = _PoolConnection(self._pool)
 
     async def close(self) -> None:
