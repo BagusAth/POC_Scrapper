@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+data/*.db
+data/*.db-*
+data/inbox/*.jsonl
+!data/inbox/.gitkeep
+design/rendered/*-implementation.png
+design/rendered/*-qa.png
+.DS_Store
+

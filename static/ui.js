@@ -1,0 +1,95 @@
+import { state } from "./state.js";
+
+const $ = (id) => document.getElementById(id);
+const number = new Intl.NumberFormat("id-ID", { notation: "compact", maximumFractionDigits: 1 });
+const fullNumber = new Intl.NumberFormat("id-ID");
+const date = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" });
+
+function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character])); }
+function relativeTime(value) {
+  if (!value) return "Belum ada snapshot";
+  const minute = Math.floor(Math.max(0, Date.now() - new Date(value).getTime()) / 60000);
+  if (minute < 1) return "Baru saja";
+  if (minute < 60) return `${minute} menit lalu`;
+  const hour = Math.floor(minute / 60); return hour < 24 ? `${hour} jam lalu` : `${Math.floor(hour / 24)} hari lalu`;
+}
+function trendBadge(id, trend, change) {
+  const element = $(id); const map = { naik: ["naik", "↗ Naik"], turun: ["turun", "↘ Turun"], stabil: ["neutral", "→ Stabil"], butuh_data: ["neutral", "Butuh data"] };
+  const [className, label] = map[trend] || map.butuh_data; element.className = `trend-badge ${className}`;
+  element.textContent = change === null || change === undefined ? label : `${change > 0 ? "+" : ""}${Math.round(change)}%`;
+}
+
+export function setConnection(connected) {
+  const element = $("connection-status"); element.classList.toggle("is-live", connected); element.classList.toggle("is-connecting", !connected);
+  element.querySelector(".connection-label").textContent = connected ? "LIVE" : "Menyambung…";
+}
+export function renderHealth() {
+  const health = state.health || {}; const youtube = health.youtube_mode === "api" ? "YouTube API" : "YouTube publik"; const mapsActive = Boolean(health.maps_configured);
+  $("source-status").innerHTML = `<span class="source-chip is-on"><i></i>${youtube}</span><span class="source-chip ${mapsActive ? "is-on" : "is-off"}"><i></i>Google Maps</span>`;
+  $("maps-status-badge").className = `source-chip ${mapsActive ? "is-on" : "is-off"}`; $("maps-status-badge").textContent = mapsActive ? "API siap · M4" : "Belum dikonfigurasi";
+  $("maps-status-copy").textContent = mapsActive ? "API sudah terdeteksi. Kolektor tempat dan ulasan mulai di milestone M4." : "Tambahkan GOOGLE_MAPS_API_KEY untuk mengaktifkan pengumpulan tempat dan ulasan pada M4.";
+}
+export function renderTopics() {
+  $("topic-tabs").innerHTML = state.topics.length ? state.topics.map((topic) => {
+    const selected = topic.id === state.activeTopicId; const count = Number(topic.videos_tracked || 0);
+    return `<button type="button" role="tab" aria-selected="${selected}" class="topic-tab ${selected ? "active" : ""}" data-topic-id="${escapeHtml(topic.id)}"><span>${escapeHtml(topic.name)}</span><small>${count ? `${count} video` : topic.status === "discovering" ? "mencari…" : "belum ada"}</small></button>`;
+  }).join("") : '<p class="watchlist-empty">Belum ada produk. Tambahkan produk pertama untuk mulai mencari tren.</p>';
+  const topic = state.topics.find((item) => item.id === state.activeTopicId);
+  $("topic-title").textContent = topic ? `Apa yang terjadi pada “${topic.name}”?` : "Pilih produk untuk melihat tren";
+  $("topic-subtitle").textContent = topic ? `Sinyal dihitung hanya dari video yang menyebut produk terkait · target ${topic.cities.join(", ")}` : "Tambahkan produk UMKM untuk memulai pemantauan YouTube secara live.";
+  if (topic?.status === "discovering") showBanner("discovering", `Penelusuran YouTube untuk “${topic.name}” sedang berjalan.`);
+  else if (topic?.status === "limited" && !topic.videos_tracked) showBanner("limited", "Belum menemukan video yang cukup relevan. Coba kata produk yang lebih spesifik.");
+  else $("topic-banner").hidden = true;
+}
+export function showBanner(status, message) {
+  const banner = $("topic-banner"); banner.className = `topic-banner ${status === "limited" ? "is-warning" : "is-loading"}`;
+  banner.innerHTML = `<span class="banner-spinner"></span>${escapeHtml(message)}`; banner.hidden = false;
+}
+export function renderLoading(loading) { $("trend-main").classList.toggle("is-loading", loading); }
+
+function chart(id, configuration) {
+  if (!window.Chart) return null;
+  state.charts[id]?.destroy(); const context = $(id).getContext("2d"); state.charts[id] = new window.Chart(context, configuration); return state.charts[id];
+}
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: false, animation: false, interaction: { intersect: false, mode: "index" },
+  plugins: { legend: { display: false }, tooltip: { backgroundColor: "#101a17", padding: 12, cornerRadius: 8, titleColor: "#83e6a7", bodyColor: "#f5f2e9" } },
+  scales: { x: { grid: { display: false }, ticks: { color: "#7b8580", maxRotation: 0, autoSkip: true, maxTicksLimit: 7, font: { size: 10 } }, border: { display: false } }, y: { beginAtZero: true, grid: { color: "rgba(117,128,122,.14)" }, ticks: { color: "#7b8580", precision: 0, font: { size: 10 } }, border: { display: false } } },
+};
+function renderWeekly(items) {
+  const hasData = items.some((item) => item.count > 0); $("weekly-empty").hidden = hasData; $("weekly-chart").hidden = !hasData;
+  if (!hasData) { state.charts["weekly-chart"]?.destroy(); return; }
+  chart("weekly-chart", { type: "bar", data: { labels: items.map((item) => new Date(`${item.week_start}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short" })), datasets: [{ data: items.map((item) => item.count), backgroundColor: "#83e6a7", hoverBackgroundColor: "#4bcf7e", borderRadius: 7, borderSkipped: false, maxBarThickness: 34 }] }, options: chartDefaults });
+}
+function renderHourly(items) {
+  const hasData = items.length > 0 && items.some((item) => item.gain > 0); $("hourly-empty").hidden = hasData; $("hourly-chart").hidden = !hasData;
+  if (!hasData) { state.charts["hourly-chart"]?.destroy(); return; }
+  const context = $("hourly-chart").getContext("2d"); const gradient = context.createLinearGradient(0, 0, 0, 250); gradient.addColorStop(0, "rgba(131,230,167,.35)"); gradient.addColorStop(1, "rgba(131,230,167,0)");
+  chart("hourly-chart", { type: "line", data: { labels: items.map((item) => new Date(item.captured_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })), datasets: [{ data: items.map((item) => item.gain), borderColor: "#42c879", backgroundColor: gradient, fill: true, tension: .35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5 }] }, options: chartDefaults });
+}
+function renderMix(mix) {
+  const labels = { review: "Review produk", resep: "Resep / cara pakai", ide_usaha: "Ide usaha", lainnya: "Lainnya" }; const colors = { review: "#83e6a7", resep: "#101a17", ide_usaha: "#f0b85d", lainnya: "#d8ddd9" };
+  const entries = Object.entries(mix || {}); const total = entries.reduce((sum, [, value]) => sum + value.count, 0); $("mix-total").textContent = fullNumber.format(total);
+  $("content-legend").innerHTML = entries.map(([key, value]) => `<li><i style="background:${colors[key]}"></i><span>${labels[key]}</span><strong>${Math.round(value.share * 100)}%</strong></li>`).join("");
+  if (!entries.length || !total) { state.charts["content-chart"]?.destroy(); return; }
+  chart("content-chart", { type: "doughnut", data: { labels: entries.map(([key]) => labels[key]), datasets: [{ data: entries.map(([, value]) => value.count), backgroundColor: entries.map(([key]) => colors[key]), borderWidth: 0, hoverOffset: 3 }] }, options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: "72%", plugins: { legend: { display: false }, tooltip: chartDefaults.plugins.tooltip } } });
+}
+export function renderMetrics() {
+  const metrics = state.metrics;
+  if (!metrics) { ["kpi-new-videos", "kpi-attention", "kpi-gain", "kpi-competition"].forEach((id) => { $(id).textContent = "—"; }); $("last-update").textContent = "Belum ada snapshot"; renderWeekly([]); renderHourly([]); renderMix({}); return; }
+  $("kpi-new-videos").textContent = fullNumber.format(metrics.new_videos_30d); $("kpi-new-note").textContent = `${fullNumber.format(metrics.new_videos_prev_30d)} video pada 30 hari sebelumnya`;
+  $("kpi-attention").textContent = metrics.attention_index === null ? "—" : `${number.format(metrics.attention_index)} / hari`; $("kpi-gain").textContent = metrics.views_gain_24h === null ? "—" : `+${number.format(metrics.views_gain_24h)}`;
+  $("kpi-gain-note").textContent = metrics.attention_change_pct === null ? "Butuh 48 jam data untuk pembanding" : `${metrics.attention_change_pct > 0 ? "+" : ""}${Math.round(metrics.attention_change_pct)}% vs 24 jam sebelumnya`;
+  $("coverage-badge").textContent = `${Math.round(metrics.coverage * 100)}% cakupan`; $("kpi-competition").textContent = metrics.competition_signal === "meningkat" ? "Meningkat" : "Stabil";
+  $("kpi-competition-note").textContent = metrics.competition_signal === "meningkat" ? "Proporsi video ide usaha bertambah" : "Belum ada lonjakan konten ide usaha"; $("last-update").textContent = `Snapshot ${relativeTime(metrics.last_snapshot_at)}`;
+  $("live-ticker").textContent = `+${fullNumber.format(metrics.views_gain_since_last || 0)} sejak snapshot`; trendBadge("supply-trend", metrics.supply_trend, metrics.supply_change_pct); trendBadge("attention-trend", metrics.attention_trend, metrics.attention_change_pct);
+  renderWeekly(metrics.weekly_new_videos || []); renderHourly(metrics.hourly_gain_series || []); renderMix(metrics.content_mix || {});
+}
+export function renderVideos() {
+  const labels = { review: "Review", resep: "Resep", ide_usaha: "Ide usaha", lainnya: "Lainnya" }; const items = state.videos || [];
+  $("video-table-body").innerHTML = items.map((video) => `<tr><td><a class="video-title" href="${escapeHtml(video.url)}" target="_blank" rel="noopener"><span>${escapeHtml(video.title)}</span><small>${escapeHtml(video.channel_title)}</small></a></td><td><span class="type-chip type-${escapeHtml(video.content_type)}">${labels[video.content_type]}</span></td><td>${date.format(new Date(video.published_at))}</td><td class="numeric">${fullNumber.format(video.views)}</td><td class="numeric">${number.format(video.views_per_day)}</td><td class="numeric gain">${video.gain_24h === null ? "—" : `+${number.format(video.gain_24h)}`}</td></tr>`).join("");
+  $("video-empty").hidden = items.length > 0; $("video-table-note").textContent = `${items.length} video ditampilkan · komentar YouTube tidak digunakan`;
+  $("trend-source-note").textContent = `Data tren dari YouTube · berdasarkan sampel ${state.metrics?.videos_tracked || 0} video`;
+}
+let toastTimer;
+export function showToast(message) { const toast = $("toast"); toast.textContent = message; toast.classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("visible"), 4200); }

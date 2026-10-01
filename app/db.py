@@ -1,0 +1,528 @@
+"""Async SQLite persistence for v3 topics, trends, opinions, and API usage."""
+
+from __future__ import annotations
+
+import json
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable, Sequence
+
+import aiosqlite
+
+from app.collectors.filters import is_comment_within_age
+from app.models import (
+    AnalyzerName, Comment, CommentIn, SentimentResult, Topic, TopicCreate,
+    Video, VideoStat,
+)
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS topics (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'umum',
+    keywords TEXT NOT NULL,
+    product_terms TEXT NOT NULL DEFAULT '[]',
+    exclude_terms TEXT NOT NULL DEFAULT '[]',
+    cities TEXT NOT NULL,
+    own_place_id TEXT,
+    status TEXT NOT NULL DEFAULT 'discovering',
+    is_seed INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    yt_last_discovery_at TEXT,
+    maps_last_refresh_at TEXT
+);
+CREATE TABLE IF NOT EXISTS videos (
+    video_id TEXT NOT NULL,
+    topic_id TEXT NOT NULL REFERENCES topics(id),
+    title TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    channel_title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    published_at TEXT NOT NULL,
+    discovered_at TEXT NOT NULL,
+    discovery_source TEXT NOT NULL,
+    content_type TEXT NOT NULL DEFAULT 'lainnya',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (video_id, topic_id)
+);
+CREATE INDEX IF NOT EXISTS idx_videos_topic ON videos(topic_id, is_active, published_at DESC);
+CREATE TABLE IF NOT EXISTS video_stats (
+    video_id TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    views INTEGER NOT NULL,
+    likes INTEGER,
+    comments INTEGER,
+    PRIMARY KEY (video_id, captured_at)
+);
+CREATE INDEX IF NOT EXISTS idx_video_stats_time ON video_stats(captured_at);
+CREATE TABLE IF NOT EXISTS places (
+    place_id TEXT NOT NULL,
+    topic_id TEXT NOT NULL REFERENCES topics(id),
+    city TEXT NOT NULL,
+    is_relevant INTEGER NOT NULL DEFAULT 1,
+    is_own INTEGER NOT NULL DEFAULT 0,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    PRIMARY KEY (place_id, topic_id)
+);
+CREATE TABLE IF NOT EXISTS place_snapshots (
+    place_id TEXT NOT NULL,
+    topic_id TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    name TEXT NOT NULL,
+    address TEXT,
+    maps_uri TEXT,
+    primary_type TEXT,
+    business_status TEXT,
+    rating REAL,
+    user_rating_count INTEGER,
+    name_mentions_product INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (place_id, topic_id, captured_at)
+);
+CREATE TABLE IF NOT EXISTS comments (
+    id TEXT NOT NULL,
+    topic_id TEXT,
+    product_id TEXT,
+    source TEXT NOT NULL,
+    place_id TEXT,
+    text TEXT NOT NULL,
+    text_is_translated INTEGER NOT NULL DEFAULT 0,
+    stars INTEGER,
+    author_name TEXT,
+    author_uri TEXT,
+    author_hash TEXT,
+    url TEXT,
+    created_at TEXT NOT NULL,
+    collected_at TEXT NOT NULL,
+    mentions_product INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    category TEXT,
+    sentiment TEXT,
+    score REAL,
+    aspects TEXT NOT NULL DEFAULT '[]',
+    topics TEXT NOT NULL DEFAULT '[]',
+    analyzer TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT,
+    PRIMARY KEY (id, topic_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comments_legacy_id ON comments(id) WHERE topic_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_comments_feed ON comments(topic_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_pending ON comments(status, collected_at);
+CREATE TABLE IF NOT EXISTS summaries (
+    topic_id TEXT PRIMARY KEY REFERENCES topics(id),
+    payload TEXT NOT NULL,
+    analyzer TEXT NOT NULL,
+    generated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS api_usage (
+    day TEXT NOT NULL,
+    api TEXT NOT NULL,
+    units INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, api)
+);
+"""
+
+
+def to_utc_iso(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def from_iso(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
+def slugify(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
+    return normalized or "topik"
+
+
+def _loads(value: str | None) -> list[str]:
+    try:
+        parsed = json.loads(value or "[]")
+        return [str(item) for item in parsed] if isinstance(parsed, list) else []
+    except json.JSONDecodeError:
+        return []
+
+
+def _row_to_topic(row: aiosqlite.Row) -> Topic:
+    data = dict(row)
+    for key in ("keywords", "product_terms", "exclude_terms", "cities"):
+        data[key] = _loads(data.get(key))
+    data["is_seed"] = bool(data["is_seed"])
+    data["is_active"] = bool(data["is_active"])
+    return Topic.model_validate(data)
+
+
+def _row_to_video(row: aiosqlite.Row) -> Video:
+    data = dict(row)
+    data["is_active"] = bool(data["is_active"])
+    return Video.model_validate(data)
+
+
+def _row_to_comment(row: aiosqlite.Row) -> Comment:
+    data = dict(row)
+    data["product_id"] = data.get("product_id") or data.get("topic_id") or "unknown"
+    data["topics"] = _loads(data.get("topics") or data.get("aspects"))
+    allowed = Comment.model_fields
+    return Comment.model_validate({key: value for key, value in data.items() if key in allowed})
+
+
+class Database:
+    """Lifecycle-owned SQLite connection with explicit domain helpers."""
+
+    def __init__(self, path: str | Path, *, comment_max_age_days: int = 180) -> None:
+        self.path = str(path)
+        self.comment_max_age_days = comment_max_age_days
+        self._connection: aiosqlite.Connection | None = None
+
+    async def init(self) -> None:
+        if self._connection is not None:
+            return
+        if self.path != ":memory:":
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        connection = await aiosqlite.connect(self.path)
+        connection.row_factory = aiosqlite.Row
+        await connection.execute("PRAGMA journal_mode=WAL")
+        await connection.execute("PRAGMA busy_timeout=5000")
+        await connection.execute("PRAGMA foreign_keys=ON")
+        await connection.executescript(SCHEMA)
+        await connection.commit()
+        self._connection = connection
+
+    async def initialize(self) -> None:
+        await self.init()
+
+    async def close(self) -> None:
+        if self._connection is not None:
+            await self._connection.close()
+            self._connection = None
+
+    def _conn(self) -> aiosqlite.Connection:
+        if self._connection is None:
+            raise RuntimeError("Database belum diinisialisasi")
+        return self._connection
+
+    async def seed_topics(self, path: str | Path) -> int:
+        cursor = await self._conn().execute("SELECT COUNT(*) FROM topics")
+        if int((await cursor.fetchone())[0]) > 0:
+            return 0
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        inserted = 0
+        for raw in payload:
+            topic = TopicCreate.model_validate({
+                key: value for key, value in raw.items() if key != "own_place_id"
+            })
+            await self.create_topic(topic, is_seed=True, own_place_id=raw.get("own_place_id"))
+            inserted += 1
+        return inserted
+
+    async def create_topic(
+        self, data: TopicCreate, *, is_seed: bool = False,
+        own_place_id: str | None = None,
+    ) -> Topic:
+        base = slugify(data.name)
+        candidate = base
+        suffix = 2
+        while await self.get_topic(candidate, include_inactive=True):
+            candidate = f"{base}-{suffix}"
+            suffix += 1
+        now = to_utc_iso(datetime.now(timezone.utc))
+        await self._conn().execute(
+            """INSERT INTO topics
+               (id,name,category,keywords,product_terms,exclude_terms,cities,
+                own_place_id,status,is_seed,is_active,created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                candidate, data.name, data.category, json.dumps(data.keywords),
+                json.dumps(data.product_terms), json.dumps(data.exclude_terms),
+                json.dumps(data.cities), own_place_id, "discovering",
+                int(is_seed), 1, now,
+            ),
+        )
+        await self._conn().commit()
+        topic = await self.get_topic(candidate)
+        assert topic is not None
+        return topic
+
+    async def get_topic(self, topic_id: str, *, include_inactive: bool = False) -> Topic | None:
+        clause = "" if include_inactive else "AND is_active=1"
+        cursor = await self._conn().execute(
+            f"SELECT * FROM topics WHERE id=? {clause}", (topic_id,)
+        )
+        row = await cursor.fetchone()
+        return _row_to_topic(row) if row else None
+
+    async def list_topics(self, *, active_only: bool = True) -> list[Topic]:
+        where = "WHERE is_active=1" if active_only else ""
+        cursor = await self._conn().execute(
+            f"SELECT * FROM topics {where} ORDER BY is_seed DESC, created_at ASC"
+        )
+        return [_row_to_topic(row) for row in await cursor.fetchall()]
+
+    async def count_active_topics(self) -> int:
+        cursor = await self._conn().execute("SELECT COUNT(*) FROM topics WHERE is_active=1")
+        return int((await cursor.fetchone())[0])
+
+    async def update_topic_status(
+        self, topic_id: str, status: str, *, discovery_at: datetime | None = None
+    ) -> None:
+        if discovery_at:
+            await self._conn().execute(
+                "UPDATE topics SET status=?, yt_last_discovery_at=? WHERE id=?",
+                (status, to_utc_iso(discovery_at), topic_id),
+            )
+        else:
+            await self._conn().execute(
+                "UPDATE topics SET status=? WHERE id=?", (status, topic_id)
+            )
+        await self._conn().commit()
+
+    async def deactivate_topic(self, topic_id: str) -> bool:
+        cursor = await self._conn().execute(
+            "UPDATE topics SET is_active=0,status='inactive' WHERE id=? AND is_active=1",
+            (topic_id,),
+        )
+        await self._conn().commit()
+        return cursor.rowcount == 1
+
+    async def upsert_videos(self, videos: Sequence[Video]) -> int:
+        inserted = 0
+        for video in videos:
+            cursor = await self._conn().execute(
+                """INSERT INTO videos
+                   (video_id,topic_id,title,channel_id,channel_title,description,
+                    published_at,discovered_at,discovery_source,content_type,is_active)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(video_id,topic_id) DO UPDATE SET
+                    title=excluded.title,channel_title=excluded.channel_title,
+                    description=excluded.description,content_type=excluded.content_type,
+                    is_active=1""",
+                (
+                    video.video_id, video.topic_id, video.title, video.channel_id,
+                    video.channel_title, video.description, to_utc_iso(video.published_at),
+                    to_utc_iso(video.discovered_at), video.discovery_source,
+                    video.content_type, int(video.is_active),
+                ),
+            )
+            inserted += int(cursor.rowcount > 0)
+        await self._conn().commit()
+        return inserted
+
+    async def list_videos(
+        self, topic_id: str, *, active_only: bool = True,
+        content_type: str | None = None,
+    ) -> list[Video]:
+        clauses, params = ["topic_id=?"], [topic_id]
+        if active_only:
+            clauses.append("is_active=1")
+        if content_type:
+            clauses.append("content_type=?")
+            params.append(content_type)
+        cursor = await self._conn().execute(
+            f"SELECT * FROM videos WHERE {' AND '.join(clauses)} ORDER BY published_at DESC",
+            params,
+        )
+        return [_row_to_video(row) for row in await cursor.fetchall()]
+
+    async def deactivate_old_videos(self, topic_id: str, cutoff: datetime) -> int:
+        cursor = await self._conn().execute(
+            "UPDATE videos SET is_active=0 WHERE topic_id=? AND published_at<? AND is_active=1",
+            (topic_id, to_utc_iso(cutoff)),
+        )
+        await self._conn().commit()
+        return cursor.rowcount
+
+    async def insert_video_stats(self, stats: Sequence[VideoStat]) -> int:
+        if not stats:
+            return 0
+        await self._conn().executemany(
+            """INSERT OR REPLACE INTO video_stats
+               (video_id,captured_at,views,likes,comments) VALUES (?,?,?,?,?)""",
+            [
+                (item.video_id, to_utc_iso(item.captured_at), item.views, item.likes, item.comments)
+                for item in stats
+            ],
+        )
+        await self._conn().commit()
+        return len(stats)
+
+    async def get_video_stats_rows(self, topic_id: str) -> list[dict[str, Any]]:
+        cursor = await self._conn().execute(
+            """SELECT s.* FROM video_stats s JOIN videos v ON v.video_id=s.video_id
+               WHERE v.topic_id=? ORDER BY s.captured_at ASC""", (topic_id,),
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+    async def get_last_snapshot_at(self, topic_id: str) -> datetime | None:
+        cursor = await self._conn().execute(
+            """SELECT MAX(s.captured_at) FROM video_stats s
+               JOIN videos v ON v.video_id=s.video_id WHERE v.topic_id=?""", (topic_id,),
+        )
+        return from_iso((await cursor.fetchone())[0])
+
+    async def usage_get(self, day: str, api: str) -> int:
+        cursor = await self._conn().execute(
+            "SELECT units FROM api_usage WHERE day=? AND api=?", (day, api)
+        )
+        row = await cursor.fetchone()
+        return int(row[0]) if row else 0
+
+    async def usage_add(self, day: str, api: str, units: int) -> int:
+        await self._conn().execute(
+            """INSERT INTO api_usage(day,api,units) VALUES (?,?,?)
+               ON CONFLICT(day,api) DO UPDATE SET units=units+excluded.units""",
+            (day, api, units),
+        )
+        await self._conn().commit()
+        return await self.usage_get(day, api)
+
+    async def usage_rows(self, prefix: str | None = None) -> list[dict[str, Any]]:
+        if prefix:
+            cursor = await self._conn().execute(
+                "SELECT * FROM api_usage WHERE api LIKE ? ORDER BY day DESC,api",
+                (f"{prefix}%",),
+            )
+        else:
+            cursor = await self._conn().execute("SELECT * FROM api_usage ORDER BY day DESC,api")
+        return [dict(row) for row in await cursor.fetchall()]
+
+    # --- Compatibility helpers for v2 analyzer and bridge tests. ---
+    async def insert_comment(self, item: CommentIn, *, max_comment_chars: int = 800) -> bool:
+        now_dt = datetime.now(timezone.utc)
+        if not is_comment_within_age(item.created_at, self.comment_max_age_days, now=now_dt):
+            return False
+        cursor = await self._conn().execute(
+            """INSERT OR IGNORE INTO comments
+               (id,topic_id,product_id,source,text,url,author_hash,created_at,collected_at)
+               VALUES (?,NULL,?,?,?,?,?,?,?)""",
+            (
+                item.id, item.product_id, item.source, item.text[:max_comment_chars],
+                item.url, item.author_hash, to_utc_iso(item.created_at), to_utc_iso(now_dt),
+            ),
+        )
+        await self._conn().commit()
+        return cursor.rowcount == 1
+
+    async def insert_comments(
+        self, items: Iterable[CommentIn], *, max_comment_chars: int = 800
+    ) -> list[Comment]:
+        inserted: list[Comment] = []
+        for item in items:
+            if await self.insert_comment(item, max_comment_chars=max_comment_chars):
+                found = await self.get_comment(item.id)
+                if found:
+                    inserted.append(found)
+        return inserted
+
+    async def get_comment(self, comment_id: str) -> Comment | None:
+        cursor = await self._conn().execute("SELECT * FROM comments WHERE id=?", (comment_id,))
+        row = await cursor.fetchone()
+        return _row_to_comment(row) if row else None
+
+    async def get_feed(
+        self, *, product_id: str | None = None, sentiment: str | None = None,
+        source: str | None = None, q: str | None = None, limit: int = 50,
+        since: datetime | None = None, before: tuple[datetime, str] | None = None,
+    ) -> list[Comment]:
+        clauses, params = ["topic_id IS NULL"], []
+        if product_id:
+            clauses.append("product_id=?"); params.append(product_id)
+        if sentiment == "pending":
+            clauses.append("status='pending'")
+        elif sentiment:
+            clauses.append("sentiment=?"); params.append(sentiment)
+        if source:
+            clauses.append("source=?"); params.append(source)
+        if q:
+            clauses.append("text LIKE ? ESCAPE '\\'")
+            escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            params.append(f"%{escaped}%")
+        if since:
+            clauses.append("created_at>=?"); params.append(to_utc_iso(since))
+        if before:
+            cursor_time = to_utc_iso(before[0])
+            clauses.append("(created_at<? OR (created_at=? AND id<?))")
+            params.extend((cursor_time, cursor_time, before[1]))
+        params.append(min(max(limit, 1), 200))
+        cursor = await self._conn().execute(
+            f"SELECT * FROM comments WHERE {' AND '.join(clauses)} ORDER BY created_at DESC,id DESC LIMIT ?",
+            params,
+        )
+        return [_row_to_comment(row) for row in await cursor.fetchall()]
+
+    async def fetch_pending(self, limit: int = 25, max_attempts: int = 5) -> list[Comment]:
+        cursor = await self._conn().execute(
+            """SELECT * FROM comments WHERE topic_id IS NULL AND status='pending'
+               AND attempts<? ORDER BY collected_at ASC LIMIT ?""", (max_attempts, limit),
+        )
+        return [_row_to_comment(row) for row in await cursor.fetchall()]
+
+    async def get_pending_comments(self, limit: int = 25, max_attempts: int = 5) -> list[Comment]:
+        return await self.fetch_pending(limit, max_attempts)
+
+    async def update_analysis(self, result: SentimentResult, analyzer: AnalyzerName) -> Comment | None:
+        await self._conn().execute(
+            """UPDATE comments SET status='analyzed',sentiment=?,score=?,topics=?,aspects=?,
+               analyzer=?,attempts=attempts+1 WHERE id=?""",
+            (result.sentiment, result.score, json.dumps(result.topics),
+             json.dumps(result.topics), analyzer, result.id),
+        )
+        await self._conn().commit()
+        return await self.get_comment(result.id)
+
+    async def update_comment_analysis(
+        self, *, comment_id: str, sentiment: str, score: float,
+        topics: list[str], analyzer: str,
+    ) -> Comment | None:
+        return await self.update_analysis(
+            SentimentResult(id=comment_id, sentiment=sentiment, score=score, topics=topics),  # type: ignore[arg-type]
+            analyzer,  # type: ignore[arg-type]
+        )
+
+    async def increment_attempts(self, ids: Iterable[str], *, fail_at: int = 5) -> None:
+        values = list(ids)
+        if not values:
+            return
+        placeholders = ",".join("?" for _ in values)
+        await self._conn().execute(
+            f"""UPDATE comments SET attempts=attempts+1,
+                status=CASE WHEN attempts+1>=? THEN 'failed' ELSE status END
+                WHERE id IN ({placeholders})""", [fail_at, *values],
+        )
+        await self._conn().commit()
+
+    async def count_pending(self) -> int:
+        cursor = await self._conn().execute("SELECT COUNT(*) FROM comments WHERE status='pending'")
+        return int((await cursor.fetchone())[0])
+
+    async def get_analyzed_recent(self, product_id: str | None = None, limit: int = 60) -> list[Comment]:
+        clause, params = ("AND product_id=?", [product_id]) if product_id else ("", [])
+        cursor = await self._conn().execute(
+            f"SELECT * FROM comments WHERE topic_id IS NULL AND status='analyzed' {clause} ORDER BY collected_at DESC LIMIT ?",
+            [*params, limit],
+        )
+        return [_row_to_comment(row) for row in await cursor.fetchall()]
+
+    async def get_stats_rows(self, product_id: str | None = None, since: datetime | None = None) -> list[Comment]:
+        clauses, params = ["topic_id IS NULL"], []
+        if product_id:
+            clauses.append("product_id=?"); params.append(product_id)
+        if since:
+            clauses.append("created_at>=?"); params.append(to_utc_iso(since))
+        cursor = await self._conn().execute(
+            f"SELECT * FROM comments WHERE {' AND '.join(clauses)}", params
+        )
+        return [_row_to_comment(row) for row in await cursor.fetchall()]
+
+
+async def init_db(path: str | Path, *, comment_max_age_days: int = 180) -> Database:
+    database = Database(path, comment_max_age_days=comment_max_age_days)
+    await database.init()
+    return database

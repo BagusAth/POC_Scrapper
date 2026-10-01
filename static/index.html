@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09110f">
+  <title>Pemantau Tren & Opini UMKM</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%2383e6a7'/%3E%3Cpath d='M8 27h7l3-12 7 23 5-18 5 9h5' fill='none' stroke='%2309110f' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#trend-main">Lewati ke ringkasan tren</a>
+  <div class="page-glow" aria-hidden="true"></div>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M9 27h6l3-12 7 23 5-18 5 9h5"/></svg></div>
+        <div><p class="eyebrow">Market intelligence untuk UMKM</p><h1>Pemantau Tren <span>&amp; Opini</span></h1></div>
+      </div>
+      <div class="header-actions">
+        <div id="source-status" class="source-status" aria-label="Status sumber data"></div>
+        <div id="connection-status" class="live-pill is-connecting" role="status" aria-live="polite"><span class="live-dot"></span><span class="connection-label">Menyambung…</span></div>
+      </div>
+    </header>
+
+    <section class="watchlist" aria-labelledby="watchlist-title">
+      <div><p id="watchlist-title" class="section-label">Produk yang dipantau</p><div id="topic-tabs" class="topic-tabs" role="tablist" aria-label="Pilih produk"></div></div>
+      <button id="add-topic-button" class="button button-primary" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>Pantau produk</button>
+    </section>
+    <div id="topic-banner" class="topic-banner" role="status" aria-live="polite" hidden></div>
+
+    <main id="trend-main">
+      <section class="hero-row">
+        <div class="hero-copy">
+          <div class="hero-kicker"><span>Panel A</span> Tren online · YouTube Indonesia</div>
+          <h2 id="topic-title">Memuat tren produk…</h2>
+          <p id="topic-subtitle">Menghitung pertumbuhan video, perhatian penonton, dan pola konten yang sedang muncul.</p>
+        </div>
+        <div class="hero-meta">
+          <label class="period-field"><span>Periode</span><select id="period-select" aria-label="Periode tren"><option value="90d" selected>90 hari</option></select></label>
+          <p id="last-update">Belum ada snapshot</p>
+        </div>
+      </section>
+
+      <section class="kpi-grid" aria-label="Metrik utama tren">
+        <article class="kpi-card kpi-emphasis"><div class="kpi-heading"><p>Video baru · 30 hari</p><span id="supply-trend" class="trend-badge neutral">—</span></div><strong id="kpi-new-videos">—</strong><p id="kpi-new-note" class="kpi-note">Menunggu hasil penelusuran</p><span class="kpi-number">01</span></article>
+        <article class="kpi-card"><div class="kpi-heading"><p>Indeks perhatian</p><span id="attention-trend" class="trend-badge neutral">—</span></div><strong id="kpi-attention">—</strong><p class="kpi-note">Median views / hari video baru</p><span class="kpi-number">02</span></article>
+        <article class="kpi-card"><div class="kpi-heading"><p>Kenaikan views · 24 jam</p><span id="coverage-badge" class="coverage-badge">0% cakupan</span></div><strong id="kpi-gain">—</strong><p id="kpi-gain-note" class="kpi-note">Butuh dua snapshot berjarak waktu</p><span class="kpi-number">03</span></article>
+        <article class="kpi-card kpi-dark"><div class="kpi-heading"><p>Persaingan ide usaha</p><span class="signal-dot"></span></div><strong id="kpi-competition">—</strong><p id="kpi-competition-note" class="kpi-note">Membandingkan proporsi konten</p><span class="kpi-number">04</span></article>
+      </section>
+
+      <section class="charts-grid">
+        <article class="panel panel-wide"><div class="panel-heading"><div><p class="panel-label">Supply</p><h3>Video baru per minggu</h3></div><div class="mini-legend"><span class="legend-mark mint"></span>Publikasi relevan</div></div><div class="chart-wrap chart-large"><canvas id="weekly-chart" aria-label="Grafik video baru per minggu"></canvas><div id="weekly-empty" class="chart-empty" hidden>Data video belum tersedia</div></div></article>
+        <article class="panel signal-panel"><div class="panel-heading"><div><p class="panel-label">Velocity</p><h3>Pergerakan perhatian</h3></div><span id="live-ticker" class="ticker">+0 sejak snapshot</span></div><div class="chart-wrap chart-large"><canvas id="hourly-chart" aria-label="Grafik kenaikan views per jam"></canvas><div id="hourly-empty" class="chart-empty" hidden>Snapshot pertama tersimpan. Grafik bergerak setelah snapshot berikutnya.</div></div></article>
+        <article class="panel mix-panel"><div class="panel-heading"><div><p class="panel-label">Content mix</p><h3>Format yang mendominasi</h3></div></div><div class="mix-layout"><div class="donut-wrap"><canvas id="content-chart" aria-label="Komposisi format konten"></canvas><div class="donut-center"><strong id="mix-total">0</strong><span>video</span></div></div><ul id="content-legend" class="content-legend"></ul></div></article>
+      </section>
+
+      <section class="panel video-panel" aria-labelledby="video-table-title">
+        <div class="panel-heading video-heading">
+          <div><p class="panel-label">Evidence</p><h3 id="video-table-title">Video pendorong tren</h3><p id="video-table-note" class="panel-note">Hanya video yang lolos filter relevansi produk.</p></div>
+          <div class="video-controls"><div id="type-filters" class="filter-tabs" role="group" aria-label="Filter tipe konten"><button class="active" data-type="" type="button">Semua</button><button data-type="review" type="button">Review</button><button data-type="resep" type="button">Resep</button><button data-type="ide_usaha" type="button">Ide usaha</button></div><label class="sort-field"><span class="sr-only">Urutkan video</span><select id="video-sort"><option value="gain">Kenaikan 24 jam</option><option value="views_per_day">Views per hari</option><option value="recent">Terbaru</option></select></label></div>
+        </div>
+        <div class="table-scroller"><table><thead><tr><th>Video</th><th>Tipe</th><th>Dipublikasikan</th><th>Views</th><th>Views / hari</th><th>Δ 24 jam</th></tr></thead><tbody id="video-table-body"></tbody></table></div>
+        <div id="video-empty" class="table-empty" hidden><div class="empty-pulse"><i></i><i></i><i></i></div><strong>Video relevan sedang dicari</strong><span>Data akan muncul otomatis dari YouTube.</span></div>
+        <p id="trend-source-note" class="data-footer">Data tren dari YouTube · berdasarkan sampel 0 video</p>
+      </section>
+
+      <section class="maps-preview" aria-label="Status Google Maps">
+        <div class="maps-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg></div>
+        <div><p class="panel-label">Panel B · tahap berikutnya</p><h3>Opini lokasi dari Google Maps</h3><p id="maps-status-copy">Tambahkan Google Maps API key untuk mengaktifkan pengumpulan tempat dan ulasan pada M4.</p></div>
+        <span id="maps-status-badge" class="source-chip is-off">Belum dikonfigurasi</span>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="topic-dialog" class="topic-dialog">
+    <form id="topic-form" method="dialog">
+      <div class="dialog-heading"><div><p class="section-label">Tambah pemantauan</p><h2>Cari tren produk apa pun</h2><p>Masukkan nama produk UMKM. Sistem membuat kata pencarian YouTube, lalu feed diperbarui otomatis.</p></div><button id="close-dialog" class="icon-button" type="button" aria-label="Tutup"><svg viewBox="0 0 20 20"><path d="m5 5 10 10m0-10L5 15"/></svg></button></div>
+      <label class="form-field"><span>Nama produk</span><input id="topic-name" name="name" minlength="2" maxlength="60" placeholder="Contoh: keripik pisang, parfum lokal" required autocomplete="off"></label>
+      <label class="form-field"><span>Kota target</span><input id="topic-city" name="city" maxlength="60" value="Bandung" required autocomplete="address-level2"></label>
+      <button id="suggest-button" class="button button-secondary full-button" type="button">Buat kata pencarian</button>
+      <div id="suggestion-box" class="suggestion-box" hidden><div><span>Kata kunci</span><div id="keyword-preview" class="tag-row"></div></div><div><span>Sinyal relevansi produk</span><div id="terms-preview" class="tag-row"></div></div><label class="form-field compact"><span>Kategori</span><select id="topic-category"><option value="makanan_minuman">Makanan & minuman</option><option value="fashion">Fashion</option><option value="kecantikan">Kecantikan</option><option value="umum">Umum</option></select></label></div>
+      <p id="topic-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-footer"><button id="cancel-topic" class="button button-ghost" type="button">Batal</button><button id="save-topic" class="button button-primary" type="submit" disabled>Mulai pantau</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+</body>
+</html>
