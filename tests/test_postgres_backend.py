@@ -24,6 +24,8 @@ def test_supabase_schema_is_private_and_indexed() -> None:
     assert "ALTER TABLE scraper.social_posts ENABLE ROW LEVEL SECURITY" in POSTGRES_SCHEMA
     assert "idx_social_posts_topic" in POSTGRES_SCHEMA
     assert "idx_comments_pending" in POSTGRES_SCHEMA
+    assert "comments_pkey PRIMARY KEY (row_key)" in POSTGRES_SCHEMA
+    assert "idx_places_topic_id" in POSTGRES_SCHEMA
 
 
 def test_database_backend_auto_configuration() -> None:

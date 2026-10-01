@@ -178,6 +178,23 @@ CREATE TABLE IF NOT EXISTS scraper.api_usage (
     PRIMARY KEY (day, api)
 );
 
+ALTER TABLE scraper.comments
+    ADD COLUMN IF NOT EXISTS row_key bigint GENERATED ALWAYS AS IDENTITY;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'scraper.comments'::regclass
+          AND contype = 'p'
+    ) THEN
+        ALTER TABLE scraper.comments
+            ADD CONSTRAINT comments_pkey PRIMARY KEY (row_key);
+    END IF;
+END
+$$;
+CREATE INDEX IF NOT EXISTS idx_places_topic_id
+    ON scraper.places(topic_id);
+
 ALTER TABLE scraper.topics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scraper.videos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scraper.video_stats ENABLE ROW LEVEL SECURITY;
