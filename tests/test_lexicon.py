@@ -29,6 +29,17 @@ async def test_negation_flips_polarity_up_to_two_tokens() -> None:
 
 
 @pytest.mark.asyncio
+async def test_indonesian_rhetorical_and_launch_context() -> None:
+    analyzer = LexiconAnalyzer()
+    rhetorical, launch = await analyzer.analyze([
+        ("c1", "Siapa sih yang nggak suka es satu ini?"),
+        ("c2", "Akhirnya mulai menunjukkan rasa pertamanya, es cappuccino cincau bisa kamu nikmati"),
+    ])
+    assert rhetorical.sentiment == "positif"
+    assert launch.sentiment == "positif"
+
+
+@pytest.mark.asyncio
 async def test_topics_are_lowercase_and_limited_to_three() -> None:
     result = (await LexiconAnalyzer().analyze([(
         "c1", "Harga, rasa, kemasan, pengiriman dan pelayanan bagus"

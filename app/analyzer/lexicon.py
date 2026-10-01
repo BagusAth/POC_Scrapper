@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+import re
 
 from app.nlp.preprocess import tokenize
 
 from .base import BaseAnalyzer, SentimentResult
 
-NEGATIONS = frozenset({"tidak", "bukan", "kurang", "belum"})
+# normalize() maps Indonesian slang such as "nggak", "gak", and "ga" to
+# "tidak". Keep the complete set here for callers that provide pre-tokenized
+# text and for future slang additions.
+NEGATIONS = frozenset({"tidak", "bukan", "kurang", "belum", "tak", "jangan"})
 TOPICS = (
     "harga", "rasa", "kemasan", "pengiriman", "pelayanan", "kualitas",
     "ukuran", "jahitan", "warna", "bahan", "promo",
@@ -50,6 +54,21 @@ class LexiconAnalyzer(BaseAnalyzer):
 
     def _analyze_one(self, comment_id: str, text: str) -> SentimentResult:
         tokens = tokenize(text)
+        normalized = " ".join(tokens)
+
+        # Context corrections for common Indonesian social-caption constructions
+        # that a bag-of-words model cannot understand. "Siapa yang tidak suka"
+        # is a rhetorical positive, not a complaint. Launch copy can mention a
+        # founder's past failures while clearly presenting a new product.
+        if re.search(r"\bsiapa(?:\s+sih)?\s+yang\s+tidak\s+suka\b", normalized):
+            return SentimentResult(id=comment_id, sentiment="positif", score=1.0, topics=[])
+        if (
+            re.search(r"\bakhirnya\b", normalized)
+            and re.search(r"\b(?:rasa pertamanya|menunjukkan|bisa kamu nikmati|hadir|meluncur)\b", normalized)
+            and not re.search(r"\b(?:tidak enak|terlalu manis|terlalu pahit|kecewa|zonk)\b", normalized)
+        ):
+            return SentimentResult(id=comment_id, sentiment="positif", score=0.8, topics=[])
+
         positive = negative = 0
         for index, token in enumerate(tokens):
             polarity = 1 if token in self.positive else -1 if token in self.negative else 0

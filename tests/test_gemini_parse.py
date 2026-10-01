@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.analyzer.base import AnalyzerError
-from app.analyzer.gemini import GeminiAnalyzer, parse_response
+from app.analyzer.gemini import GeminiAnalyzer, SYSTEM_PROMPT, parse_response
 
 
 def test_parse_valid_response_maps_short_ids_and_cleans_values() -> None:
@@ -26,6 +26,12 @@ def test_parse_ignores_foreign_id_and_leaves_missing_id_absent() -> None:
     ]
     result = parse_response(raw, {"c1": "rp_1", "c2": "rp_2"})
     assert [item.id for item in result] == ["rp_1"]
+
+
+def test_gemini_prompt_explains_indonesian_rhetorical_negation() -> None:
+    assert "Siapa sih yang nggak suka" in SYSTEM_PROMPT
+    assert "positif" in SYSTEM_PROMPT
+    assert "pernah gagal" in SYSTEM_PROMPT
 
 
 class _FakeModels:
