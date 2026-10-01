@@ -80,7 +80,7 @@ Semua key hanya dibaca dari `.env`; jangan masukkan key ke source code atau comm
 
 | Variabel | Default | Fungsi |
 |---|---:|---|
-| `SOURCES` | `youtube_trend,maps` | Sumber yang disiapkan aplikasi |
+| `SOURCES` | `youtube_trend,maps,tiktok,instagram,facebook,shopee` | Sumber yang disiapkan aplikasi |
 | `YOUTUBE_API_KEY` | kosong | Key server YouTube Data API v3; kosong memakai mode publik |
 | `YT_TREND_LOOKBACK_DAYS` | `90` | Batas umur video aktif |
 | `YT_SEARCH_DATE_PAGES` | `2` | Halaman discovery terbaru |
