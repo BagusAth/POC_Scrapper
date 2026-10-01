@@ -42,6 +42,13 @@ class MapsUsageTracker:
             raise MapsBudgetExceededError("Batas request Google Maps bulan ini tercapai")
         return await self.database.usage_add(day, api, units)
 
+    async def refund(self, api: str, units: int = 1, *, now: datetime | None = None) -> None:
+        if not api.startswith("maps_") or units < 1:
+            return
+        day = self.day(now)
+        if await self.database.usage_get(day, api) >= units:
+            await self.database.usage_add(day, api, -units)
+
     async def status(self, *, now: datetime | None = None) -> dict[str, Any]:
         day = self.day(now)
         rows = await self.database.usage_rows("maps_")

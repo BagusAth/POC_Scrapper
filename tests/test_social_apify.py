@@ -87,11 +87,12 @@ def test_instagram_input_and_social_parser() -> None:
 
 
 def test_facebook_keyword_input_and_parser() -> None:
-    settings = Settings(_env_file=None, apify_token="x", social_results_per_query=25)
+    settings = Settings(_env_file=None, apify_token="x", social_results_per_query=50, facebook_results_per_query=25)
     client = SocialApifyClient(settings, SocialUsageTracker(Database(":memory:")))
     payload = client.build_input("facebook", topic())
     assert payload["categories"] == ["sepatu lokal", "sneakers lokal", "sepatu"]
     assert payload["searchType"] == "posts"
+    assert payload["resultsLimit"] == 25
     posts = parse_social_items("facebook", [{
         "postId": "fb-1", "postText": "Sepatu lokal nyaman untuk harian",
         "publishedAt": "2026-09-30T00:00:00Z", "authorName": "UMKM Bandung",

@@ -115,7 +115,10 @@ class ApifyMapsClient:
                 continue
 
             if response.status_code in {401, 403}:
-                raise MapsPermissionError("Token Apify tidak memiliki izin")
+                detail = self._error_message(response, "Token Apify tidak dapat menjalankan Actor Maps")
+                if "monthly usage hard limit" in detail.casefold() or "usage hard limit" in detail.casefold():
+                    detail = "Batas penggunaan bulanan Apify tercapai; naikkan hard limit atau gunakan token Apify lain"
+                raise MapsPermissionError(detail)
             if response.status_code == 429:
                 if attempt == retries - 1:
                     raise MapsRateLimitedError("Apify sedang membatasi request")
@@ -174,9 +177,13 @@ class ApifyMapsClient:
         # is intentionally charged once before the run is created.
         await self.usage.consume("maps_apify_run", 1, now=started_at)
         actor_path = quote(self.actor_id, safe="~")
-        run_payload = await self._request_json(
-            "POST", f"/actors/{actor_path}/runs", json_payload=payload
-        )
+        try:
+            run_payload = await self._request_json(
+                "POST", f"/actors/{actor_path}/runs", json_payload=payload
+            )
+        except Exception:
+            await self.usage.refund("maps_apify_run", 1, now=started_at)
+            raise
         run_data = run_payload.get("data", {}) if isinstance(run_payload, dict) else {}
         run_id = str(run_data.get("id") or "")
         dataset_id = str(run_data.get("defaultDatasetId") or "")

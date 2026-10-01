@@ -168,7 +168,10 @@ class SocialApifyClient:
                 await asyncio.sleep(2**attempt)
                 continue
             if response.status_code in {401, 403}:
-                raise SocialPermissionError("Token Apify tidak memiliki izin sosial")
+                detail = self._message(response, "Token Apify tidak dapat menjalankan Actor sosial")
+                if "monthly usage hard limit" in detail.casefold() or "usage hard limit" in detail.casefold():
+                    detail = "Batas penggunaan bulanan Apify tercapai; naikkan hard limit atau gunakan token Apify lain"
+                raise SocialPermissionError(detail)
             if response.status_code == 429:
                 if attempt == retries - 1:
                     raise SocialRateLimitedError("Apify sedang membatasi sosial request")
@@ -197,9 +200,13 @@ class SocialApifyClient:
         queries = self.queries_for(topic)
         await self.usage.consume(platform, now=started_at)
         actor_path = quote(self.actor_id(platform), safe="~")
-        started = await self._request_json(
-            "POST", f"/actors/{actor_path}/runs", json_payload=payload
-        )
+        try:
+            started = await self._request_json(
+                "POST", f"/actors/{actor_path}/runs", json_payload=payload
+            )
+        except Exception:
+            await self.usage.refund(platform, now=started_at)
+            raise
         data = started.get("data", {}) if isinstance(started, dict) else {}
         run_id = str(data.get("id") or "")
         dataset_id = str(data.get("defaultDatasetId") or "")

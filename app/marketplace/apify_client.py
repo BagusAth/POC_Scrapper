@@ -78,7 +78,10 @@ class ShopeeApifyClient:
                 await asyncio.sleep(2**attempt)
                 continue
             if response.status_code in {401, 403}:
-                raise MarketplacePermissionError("Token Apify tidak memiliki izin Shopee")
+                detail = self._message(response, "Token Apify tidak dapat menjalankan Actor Shopee")
+                if "monthly usage hard limit" in detail.casefold() or "usage hard limit" in detail.casefold():
+                    detail = "Batas penggunaan bulanan Apify tercapai; naikkan hard limit atau gunakan token Apify lain"
+                raise MarketplacePermissionError(detail)
             if response.status_code == 400:
                 raise MarketplaceBadRequestError(self._message(response, "Input Actor Shopee tidak valid"))
             if response.status_code == 429:
@@ -107,7 +110,11 @@ class ShopeeApifyClient:
         payload = self.build_input(topic)
         await self.usage.consume(self.platform, now=started_at)
         actor_path = quote(self.settings.shopee_actor_id, safe="~")
-        started = await self._request_json("POST", f"/acts/{actor_path}/runs", json_payload=payload)
+        try:
+            started = await self._request_json("POST", f"/acts/{actor_path}/runs", json_payload=payload)
+        except Exception:
+            await self.usage.refund(self.platform, now=started_at)
+            raise
         data = started.get("data", {}) if isinstance(started, dict) else {}
         run_id = str(data.get("id") or "")
         dataset_id = str(data.get("defaultDatasetId") or "")

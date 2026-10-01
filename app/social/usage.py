@@ -40,6 +40,15 @@ class SocialUsageTracker:
             raise SocialBudgetExceededError("Batas run sosial bulan ini tercapai")
         return await self.database.usage_add(day, f"social_{platform}_run", 1)
 
+    async def refund(self, platform: str, *, now: datetime | None = None) -> None:
+        """Release a reservation when Apify rejected the run before start."""
+        if platform not in {"tiktok", "instagram", "facebook"}:
+            return
+        day = self.day(now)
+        api = f"social_{platform}_run"
+        if await self.database.usage_get(day, api) > 0:
+            await self.database.usage_add(day, api, -1)
+
     async def status(self, *, now: datetime | None = None) -> dict[str, Any]:
         day = self.day(now)
         rows = await self.database.usage_rows("social_")
