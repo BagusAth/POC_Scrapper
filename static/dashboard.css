@@ -47,6 +47,7 @@ body { color: var(--text); }
 .watchlist .button-primary { min-height: 43px; }
 .topic-banner { margin-bottom: 15px; border-color: #badfc7; background: #e8f8ed; color: #356149; }
 #trend-main { display: block; overflow: visible; border-radius: 0; background: transparent; box-shadow: none; }
+#trend-main.is-loading { opacity: 1; pointer-events: auto; }
 #trend-main > * { width: auto; }
 .hero-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; border-radius: 18px; background: #f8fbf8; padding: 24px 27px; }
 .hero-kicker { color: #6d7b73; }.hero-kicker span:first-child { background: var(--ink); color: var(--mint); }
