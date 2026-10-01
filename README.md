@@ -5,8 +5,9 @@ POC v3 membantu UMKM membaca dua sinyal yang berbeda:
 - **YouTube untuk tren produk** — pasokan video, pertumbuhan views, format konten, dan sinyal persaingan.
 - **Google Maps untuk opini pelanggan** — tempat, rating, ulasan produk, dan pesaing lokal.
 - **TikTok + Instagram untuk sinyal konten** — post publik, caption, engagement, dan creator signal dari keyword/hashtag.
+- **Facebook + Shopee untuk variasi sinyal UMKM** — post publik Facebook untuk sentimen dan katalog produk Shopee Indonesia untuk harga, rating, serta sold count bila tersedia.
 
-Implementasi saat ini mencakup **P3/M3 + Maps/Social POC**: fondasi data dan kuota, discovery YouTube, snapshot metrik, live ticker SSE, dashboard tren, kolektor opini Google Maps, serta discovery TikTok/Instagram melalui Apify. Tanpa `APIFY_TOKEN`, aplikasi tidak melakukan request dan secara jujur menampilkan sumber Apify belum dikonfigurasi.
+Implementasi saat ini mencakup **P3/M3 + Maps/Social/Marketplace POC**: fondasi data dan kuota, discovery YouTube, snapshot metrik, live ticker SSE, dashboard tren, kolektor opini Google Maps, discovery TikTok/Instagram/Facebook, serta discovery Shopee melalui Apify. Tanpa `APIFY_TOKEN`, aplikasi tidak melakukan request dan secara jujur menampilkan sumber Apify belum dikonfigurasi.
 
 ## Jalankan dalam kurang dari 10 menit
 
@@ -25,7 +26,7 @@ Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Tiga topik awal tersedia: C
 
 ### Deploy ke Vercel (POC)
 
-Vercel mengenali `index.py` sebagai entrypoint FastAPI. Deploy dari root repo dengan `npx vercel --prod`, lalu isi Environment Variables `APIFY_TOKEN`, `SOURCES=youtube_trend,maps,tiktok,instagram`, dan `SUPABASE_DB_URL` pada project Vercel. Gunakan connection string Supavisor/session pooler yang server-side. Jika variabel tersebut kosong, aplikasi kembali memakai SQLite `/tmp` yang bersifat sementara.
+Vercel mengenali `index.py` sebagai entrypoint FastAPI. Deploy dari root repo dengan `npx vercel --prod`, lalu isi Environment Variables `APIFY_TOKEN`, `SOURCES=youtube_trend,maps,tiktok,instagram,facebook,shopee`, dan `SUPABASE_DB_URL` pada project Vercel. Gunakan connection string Supavisor/session pooler yang server-side. Jika variabel tersebut kosong, aplikasi kembali memakai SQLite `/tmp` yang bersifat sementara.
 
 ### Supabase MCP
 
@@ -54,9 +55,10 @@ Dashboard tidak memakai data demo untuk Panel A.
 - Komentar YouTube sengaja dimatikan (`YT_COMMENTS_ENABLED=false`). Komentar video sering membahas kreator/tutorial, bukan pengalaman terhadap produk.
 - Angka tren adalah sampel hasil pencarian, bukan seluruh YouTube. Produk niche memang dapat menunjukkan kenaikan kecil atau tidak ada video; aplikasi tidak mengarang angka untuk mengisi grafik.
 - Jika `APIFY_TOKEN` diisi, server menjalankan Actor `compass~crawler-google-places`, menunggu status `SUCCEEDED`, lalu mengambil dataset ulasan terbaru. Hasilnya difilter berdasarkan nama/kata produk sebelum masuk feed opini.
-- Jika token kosong, tidak ada data Maps/TikTok/Instagram sintetis yang dibuat; health API menampilkan sumber Apify belum dikonfigurasi.
+- Jika token kosong, tidak ada data Maps/TikTok/Instagram/Facebook/Shopee sintetis yang dibuat; health API menampilkan sumber Apify belum dikonfigurasi.
 - TikTok dan Instagram dikumpulkan dalam satu Actor run per platform/topik. Maksimal tiga keyword/hashtag digabung, sampai 50 post per query, lalu filter umur dan relevansi dilakukan lokal. Download video, thumbnail, avatar, transkripsi, AI description, dan crawl komentar dimatikan default.
 - Caption sosial yang lolos relevansi dianalisis menjadi positif, negatif, atau netral memakai analyzer Gemini yang dikonfigurasi dan fallback leksikon lokal. Statistik harian, aspek dominan, dan label per post ditampilkan di dashboard.
+- Facebook memakai Actor pencarian post publik dengan maksimal 25 hasil/query. Shopee memakai Actor keyword Indonesia dengan `fetchDetail=false` agar pengumpulan katalog tetap ringan; parser menyimpan hanya produk yang menyebut kata produk yang dipantau. Field yang tidak disediakan Actor tetap ditampilkan sebagai kosong, bukan dibuat-buat.
 
 Uji satu kata produk tanpa mengubah database utama:
 
@@ -67,6 +69,7 @@ python scripts/yt_trend_probe.py "keripik pisang"
 python scripts/maps_probe.py "sepatu lokal" --city Bandung
 python scripts/social_probe.py "sepatu lokal" --platform tiktok
 python scripts/social_probe.py "sepatu lokal" --platform instagram
+python scripts/social_probe.py "sepatu lokal" --platform facebook
 ```
 
 Probe YouTube mencetak query, jumlah kandidat/relevan, komposisi konten, video teratas, dan unit API yang dipakai. Probe Maps menjalankan satu Actor Apify dan hanya mencetak ringkasan tempat relevan. Probe sosial menjalankan satu Actor per platform dan mencetak post relevan tanpa menulis ke database utama; tanpa token probe berhenti sebelum mengirim request.
@@ -133,7 +136,7 @@ Untuk mode API resmi:
 
 Referensi Actor: [input schema Google Maps Scraper](https://apify.com/compass/crawler-google-places/input-schema) dan [API Actor](https://apify.com/compass/crawler-google-places/api).
 
-Referensi sosial: [TikTok Scraper input](https://apify.com/clockworks/tiktok-scraper/input-schema), [TikTok API](https://apify.com/clockworks/tiktok-scraper/api), [Instagram Scraper input](https://apify.com/apify/instagram-scraper/input-schema), dan [Instagram API](https://apify.com/apify/instagram-scraper/api). Satu token Apify berlaku untuk semua Actor; token hanya dipakai server.
+Referensi sosial: [TikTok Scraper input](https://apify.com/clockworks/tiktok-scraper/input-schema), [TikTok API](https://apify.com/clockworks/tiktok-scraper/api), [Instagram Scraper input](https://apify.com/apify/instagram-scraper/input-schema), [Instagram API](https://apify.com/apify/instagram-scraper/api), dan [Facebook Search Scraper input](https://apify.com/apify/facebook-search-scraper/input-schema). Referensi marketplace: [Shopee Scraper input](https://apify.com/xtracto/shopee-scraper/input-schema) dan [Shopee Scraper API](https://apify.com/xtracto/shopee-scraper/api). Satu token Apify berlaku untuk semua Actor; token hanya dipakai server.
 
 Restart server setelah mengubah `.env`. Jangan pernah menggunakan key server di JavaScript browser.
 
@@ -151,7 +154,7 @@ Snapshot tidak diubah setelah ditulis. Event `trend_tick` dikirim lewat Server-S
 ## Endpoint v3
 
 - `GET /api/health` — mode sumber, konfigurasi key, dan status AI.
-- `GET /api/usage` — unit YouTube dan request Maps terhadap cap.
+- `GET /api/usage` — unit YouTube dan request Maps, sosial, serta marketplace terhadap cap.
 - `GET /api/topics` — watchlist produk.
 - `POST /api/topics/suggest` — saran kata kunci cepat.
 - `POST /api/topics` — tambah topik dan mulai discovery latar belakang.
@@ -160,8 +163,10 @@ Snapshot tidak diubah setelah ditulis. Event `trend_tick` dikirim lewat Server-S
 - `GET /api/trend/videos?topic_id=...&sort=gain&type=review` — tabel bukti video.
 - `GET /api/maps/places?topic_id=...` — tempat relevan dan snapshot rating dari koleksi Apify.
 - `GET /api/maps/feed?topic_id=...` — opini Maps yang lolos filter produk.
-- `GET /api/social/feed?topic_id=...&platform=tiktok|instagram` — post publik yang caption-nya relevan.
+- `GET /api/social/feed?topic_id=...&platform=tiktok|instagram|facebook` — post publik yang caption-nya relevan.
 - `GET /api/social/stats?topic_id=...` — jumlah post, agregat engagement, distribusi sentiment, aspek, dan trend harian.
+- `GET /api/marketplace/products?topic_id=...&platform=shopee` — produk Shopee yang lolos filter keyword.
+- `GET /api/marketplace/stats?topic_id=...&platform=shopee` — agregat harga, rating, dan sold count.
 - `GET /api/stream` — `trend_tick`, `topic_status`, dan keep-alive.
 - `GET /docs` — dokumentasi OpenAPI interaktif.
 
@@ -221,6 +226,8 @@ Perintah ini menghapus database lokal aplikasi, membuat schema v3, dan menanam t
 ```text
 app/youtube/       discovery, client, quota, snapshot, metrik, scheduler
 app/maps/          Apify client, parser, relevansi, collector, error, budget guard
+app/social/        TikTok, Instagram, Facebook, sentiment, collector, budget guard
+app/marketplace/   Shopee Apify client, parser, collector, budget guard
 app/topics/        layanan watchlist produk
 app/api/           endpoint topics, trend, usage, health, SSE
 static/            dashboard P3 responsif

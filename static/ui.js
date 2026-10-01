@@ -25,8 +25,8 @@ export function setConnection(connected) {
 }
 export function renderHealth() {
   const health = state.health || {}; const sources = health.sources_active || []; const youtube = health.youtube_mode === "api" ? "YouTube API" : "YouTube publik"; const mapsActive = Boolean(health.maps_configured);
-  const tiktokActive = Boolean(health.tiktok_configured); const instagramActive = Boolean(health.instagram_configured);
-  $("source-status").innerHTML = `${sources.includes("youtube_trend") ? `<span class="source-chip is-on"><i></i>${youtube}</span>` : ""}${sources.includes("maps") ? `<span class="source-chip ${mapsActive ? "is-on" : "is-off"}"><i></i>Google Maps</span>` : ""}${sources.includes("tiktok") ? `<span class="source-chip ${tiktokActive ? "is-on" : "is-off"}"><i></i>TikTok</span>` : ""}${sources.includes("instagram") ? `<span class="source-chip ${instagramActive ? "is-on" : "is-off"}"><i></i>Instagram</span>` : ""}`;
+  const tiktokActive = Boolean(health.tiktok_configured); const instagramActive = Boolean(health.instagram_configured); const facebookActive = Boolean(health.facebook_configured); const shopeeActive = Boolean(health.shopee_configured);
+  $("source-status").innerHTML = `${sources.includes("youtube_trend") ? `<span class="source-chip is-on"><i></i>${youtube}</span>` : ""}${sources.includes("maps") ? `<span class="source-chip ${mapsActive ? "is-on" : "is-off"}"><i></i>Google Maps</span>` : ""}${sources.includes("tiktok") ? `<span class="source-chip ${tiktokActive ? "is-on" : "is-off"}"><i></i>TikTok</span>` : ""}${sources.includes("instagram") ? `<span class="source-chip ${instagramActive ? "is-on" : "is-off"}"><i></i>Instagram</span>` : ""}${sources.includes("facebook") ? `<span class="source-chip ${facebookActive ? "is-on" : "is-off"}"><i></i>Facebook</span>` : ""}${sources.includes("shopee") ? `<span class="source-chip ${shopeeActive ? "is-on" : "is-off"}"><i></i>Shopee</span>` : ""}`;
   $("maps-status-badge").className = `source-chip ${mapsActive ? "is-on" : "is-off"}`; $("maps-status-badge").textContent = mapsActive ? `${health.maps_provider === "apify" ? "Apify aktif" : "Places aktif"}` : "Belum dikonfigurasi";
   $("maps-status-copy").textContent = mapsActive ? "Server menjalankan pencarian tempat dan ulasan terbaru melalui Apify." : "Google Maps belum dikonfigurasi di server; data tersimpan tetap aman dan tidak dihapus.";
   renderSourceNavigation();
@@ -64,11 +64,11 @@ export function renderActiveSource() {
   $("social-panel-title").textContent = source === "tiktok" ? "Video TikTok yang sedang ramai" : source === "instagram" ? "Caption Instagram yang sedang ramai" : source === "facebook" ? "Post Facebook yang sedang ramai" : "Suara pasar yang sedang ramai";
 }
 export function renderSourceProgress() {
-  const active = ["tiktok", "instagram", "facebook"].includes(state.activeSource) ? "social" : state.activeSource; const group = active === "overview" ? ["youtube", "maps", "social", "marketplace"] : [active]; const statuses = group.map(sourceState); const loading = statuses.some((status) => status.loading); const loaded = statuses.length > 0 && statuses.every((status) => status.loaded); const errors = statuses.find((status) => status.error);
+  const active = ["tiktok", "instagram", "facebook"].includes(state.activeSource) ? "social" : state.activeSource === "shopee" ? "marketplace" : state.activeSource; const group = active === "overview" ? ["youtube", "maps", "social", "marketplace"] : [active]; const statuses = group.map(sourceState); const loading = statuses.some((status) => status.loading); const loaded = statuses.length > 0 && statuses.every((status) => status.loaded); const errors = statuses.find((status) => status.error);
   const topic = state.topics.find((item) => item.id === state.activeTopicId); const title = $("source-progress-title"); const copy = $("source-progress-copy"); const bar = $("source-progress-bar"); const percent = $("source-progress-percent"); const card = $("source-progress");
   if (loaded && !loading) { card.classList.add("is-loaded"); title.textContent = "Data tersimpan sudah tampil"; copy.textContent = "Refresh sumber tetap berjalan otomatis di background; dashboard tidak dikosongkan saat proses berlangsung."; bar.style.width = "100%"; percent.textContent = "Siap"; }
   else if (errors) { card.classList.remove("is-loaded"); title.textContent = "Sebagian sumber perlu dicoba lagi"; copy.textContent = `${errors.error}. Data dari sumber lain tetap bisa dibaca.`; bar.style.width = `${Math.max(18, Math.round((statuses.filter((status) => status.loaded).length / statuses.length) * 100))}%`; percent.textContent = "Perlu cek"; }
-  else if (loading || topic?.status === "discovering") { card.classList.remove("is-loaded"); const label = active === "overview" ? "sumber data" : active === "social" ? sourceNames[state.activeSource] || "TikTok & Instagram" : sourceNames[active]; title.textContent = `Memuat ${label}`; copy.textContent = "Membaca snapshot Supabase lebih dulu, lalu pengambilan baru berjalan hemat token di background."; const done = statuses.filter((status) => status.loaded).length; bar.style.width = `${Math.max(22, Math.round((done / statuses.length) * 100))}%`; percent.textContent = `${Math.max(22, Math.round((done / statuses.length) * 100))}%`; }
+  else if (loading || topic?.status === "discovering") { card.classList.remove("is-loaded"); const label = active === "overview" ? "sumber data" : active === "social" ? sourceNames[state.activeSource] || "TikTok, Instagram & Facebook" : active === "marketplace" ? "Shopee" : sourceNames[active]; title.textContent = `Memuat ${label}`; copy.textContent = "Membaca snapshot Supabase lebih dulu, lalu pengambilan baru berjalan hemat token di background."; const done = statuses.filter((status) => status.loaded).length; bar.style.width = `${Math.max(22, Math.round((done / statuses.length) * 100))}%`; percent.textContent = `${Math.max(22, Math.round((done / statuses.length) * 100))}%`; }
   else { card.classList.remove("is-loaded"); title.textContent = "Menyiapkan sumber data"; copy.textContent = "Pilih sumber di sidebar. Data yang sudah tersimpan tidak akan hilang saat refresh."; bar.style.width = "10%"; percent.textContent = "10%"; }
 }
 export function renderUsage() {
@@ -78,12 +78,12 @@ export function renderUsage() {
     element.className = "apify-usage is-off"; element.innerHTML = "<strong>Apify belum aktif</strong><span>Token server belum siap</span>"; return;
   }
   if (!social) {
-    const maps = state.usage?.maps || {}; element.className = "apify-usage";
-    element.innerHTML = `<strong>Apify token aktif</strong><span>Maps ${Number(maps.today || 0)}/${Number(maps.daily_limit || 0)} request hari ini</span>`; return;
+    const maps = state.usage?.maps || {}; const marketplace = state.usage?.marketplace || {}; element.className = "apify-usage";
+    element.innerHTML = `<strong>Apify token aktif</strong><span>Maps ${Number(maps.today || 0)}/${Number(maps.daily_limit || 0)} · Shopee ${Number(marketplace.today || 0)}/${Number(marketplace.daily_limit || 0)} run</span>`; return;
   }
   const daily = Number(social.today || 0); const dailyLimit = Number(social.daily_limit || 0); const monthly = Number(social.this_month || 0); const monthlyLimit = Number(social.monthly_limit || 0);
   const ratio = dailyLimit ? daily / dailyLimit : 0; element.className = `apify-usage ${ratio >= .85 ? "is-warning" : ""}`;
-  element.innerHTML = `<strong>Apify ${daily}/${dailyLimit} run hari ini</strong><span>${monthly}/${monthlyLimit} bulan · ${health.social_sentiment_enabled ? "sentiment aktif" : "sentiment off"}</span>`;
+  const marketplace = state.usage?.marketplace || {}; element.innerHTML = `<strong>Apify ${daily}/${dailyLimit} run hari ini</strong><span>${monthly}/${monthlyLimit} sosial · Shopee ${Number(marketplace.today || 0)}/${Number(marketplace.daily_limit || 0)} · ${health.social_sentiment_enabled ? "sentiment aktif" : "sentiment off"}</span>`;
 }
 export function renderTopics() {
   $("topic-tabs").innerHTML = state.topics.length ? state.topics.map((topic) => {

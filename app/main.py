@@ -24,6 +24,7 @@ from app.api.routes_stream import create_stream_router
 from app.api.routes_summary import SummaryService, create_summary_router
 from app.api.routes_topics import create_topics_router
 from app.api.routes_maps import create_maps_router, create_places_compat_router
+from app.api.routes_marketplace import create_marketplace_router
 from app.api.routes_social import create_social_router
 from app.api.routes_trend import create_trend_router
 from app.api.routes_usage import create_usage_router
@@ -124,7 +125,7 @@ def create_app(
     )
     if (
         runtime.apify_token
-        and {"tiktok", "instagram"}.intersection(runtime.active_sources)
+        and {"tiktok", "instagram", "facebook"}.intersection(runtime.active_sources)
     ):
         social_client = SocialApifyClient(runtime, social_usage)
         social_collector = SocialCollector(
@@ -263,7 +264,6 @@ def create_app(
     application.include_router(create_maps_router(database))
     application.include_router(create_places_compat_router(database))
     application.include_router(create_social_router(database))
-    from app.api.routes_marketplace import create_marketplace_router
     application.include_router(create_marketplace_router(database))
     application.include_router(create_stream_router(broker))
 

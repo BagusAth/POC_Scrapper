@@ -3,6 +3,7 @@
 Examples:
     python scripts/social_probe.py "sepatu lokal" --platform tiktok
     python scripts/social_probe.py "sepatu lokal" --platform instagram
+    python scripts/social_probe.py "sepatu lokal" --platform facebook
 """
 
 from __future__ import annotations
@@ -28,8 +29,8 @@ from app.social.usage import SocialUsageTracker
 
 async def run(product: str, platform: str) -> int:
     settings = get_settings()
-    if platform not in {"tiktok", "instagram"}:
-        print("platform harus tiktok atau instagram")
+    if platform not in {"tiktok", "instagram", "facebook"}:
+        print("platform harus tiktok, instagram, atau facebook")
         return 2
     if not settings.apify_token:
         print("APIFY_TOKEN belum diisi; tidak ada request yang dikirim")
@@ -69,7 +70,7 @@ async def run(product: str, platform: str) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("product")
-    parser.add_argument("--platform", choices=("tiktok", "instagram"), required=True)
+    parser.add_argument("--platform", choices=("tiktok", "instagram", "facebook"), required=True)
     args = parser.parse_args()
     raise SystemExit(asyncio.run(run(args.product, args.platform)))
 

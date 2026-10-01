@@ -104,7 +104,7 @@ class TrendScheduler:
                 try:
                     await self.social_collector.refresh_topic(topic)
                 except Exception as exc:
-                    logger.exception("Refresh TikTok/Instagram gagal untuk %s", topic.id)
+                    logger.exception("Refresh sosial gagal untuk %s", topic.id)
                     await self.broker.publish("social_status", {
                         "topic_id": topic.id, "status": "limited", "source": "apify_social",
                         "message": str(exc), "counts": {"relevant_posts": 0, "new_posts": 0},

@@ -69,6 +69,11 @@ def create_health_router(
                 settings.apify_token and "shopee" in sources
             ),
             "max_active_topics": settings.max_active_topics,
+            "social_daily_run_cap": settings.social_daily_run_cap,
+            "social_monthly_run_cap": settings.social_monthly_run_cap,
+            "marketplace_results_per_query": settings.marketplace_results_per_query,
+            "marketplace_daily_run_cap": settings.marketplace_daily_run_cap,
+            "marketplace_monthly_run_cap": settings.marketplace_monthly_run_cap,
             "social_sentiment_enabled": settings.social_sentiment_enabled,
             "social_sentiment_analyzer": analyzer.get("active_analyzer", settings.ai_mode),
             "yt_comments_enabled": settings.yt_comments_enabled,

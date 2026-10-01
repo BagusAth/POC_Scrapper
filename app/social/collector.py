@@ -91,7 +91,7 @@ class SocialCollector:
         await self.broker.publish("social_status", {
             "topic_id": topic.id,
             "status": "active" if totals["relevant_posts"] else "limited",
-            "message": f"{totals['relevant_posts']} post relevan dari TikTok/Instagram",
+            "message": f"{totals['relevant_posts']} post relevan dari TikTok/Instagram/Facebook",
             "counts": totals,
         })
         return totals

@@ -67,11 +67,16 @@ class Settings(BaseSettings):
     instagram_actor_id: str = "apify~instagram-scraper"
     facebook_actor_id: str = "apify~facebook-search-scraper"
     social_results_per_query: int = 50
+    # Facebook post search is cheaper than a media scraper; keep its payload
+    # smaller than TikTok/Instagram while retaining enough trend evidence.
+    facebook_results_per_query: int = 25
     social_max_queries_per_topic: int = 3
     social_lookback_days: int = 30
     social_refresh_hours: float = 12.0
-    social_daily_run_cap: int = 12
-    social_monthly_run_cap: int = 300
+    # Three social platforms share this budget. Eighteen runs cover one daily
+    # refresh for six active topics without silently starving Facebook.
+    social_daily_run_cap: int = 18
+    social_monthly_run_cap: int = 450
     social_comments_enabled: bool = False
     social_sentiment_enabled: bool = True
 

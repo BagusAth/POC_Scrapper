@@ -112,7 +112,7 @@ class SocialApifyClient:
                 "categories": queries,
                 "locations": topic.cities[:1],
                 "searchType": "posts",
-                "resultsLimit": limit,
+                "resultsLimit": max(1, self.settings.facebook_results_per_query),
             }
         tags = [
             "https://www.instagram.com/explore/tags/"
