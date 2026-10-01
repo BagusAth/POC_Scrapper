@@ -46,8 +46,8 @@ def create_health_router(
             "youtube_mode": "api" if settings.youtube_api_key else "public",
             "maps_provider": settings.maps_provider,
             "maps_configured": bool(
-                settings.apify_token if settings.maps_provider == "apify"
-                else settings.google_maps_api_key
+                (settings.apify_token and "maps" in sources) if settings.maps_provider == "apify"
+                else (settings.google_maps_api_key and "maps" in sources)
             ),
             "apify_configured": bool(settings.apify_token),
             "tiktok_configured": bool(
@@ -69,11 +69,13 @@ def create_health_router(
                     else "Mode publik YouTube aktif; tambahkan API key untuk kuota resmi"
                 ),
                 "maps": (
-                    f"Apify Google Maps aktif ({settings.apify_actor_id})"
+                    "Google Maps tidak diaktifkan pada SOURCES"
+                    if "maps" not in sources
+                    else f"Apify Google Maps aktif ({settings.apify_actor_id})"
                     if settings.maps_provider == "apify" and settings.apify_token
                     else "Google Maps Places aktif"
                     if settings.maps_provider == "places" and settings.google_maps_api_key
-                    else "Google Maps (Apify) belum dikonfigurasi"
+                    else "Google Maps belum dikonfigurasi"
                 ),
                 "tiktok": (
                     f"TikTok Apify aktif ({settings.tiktok_actor_id})"
