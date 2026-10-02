@@ -1,4 +1,264 @@
-@import url('/static/tokens.css');
-@import url('/static/components.css');
-@import url('/static/responsive.css');
+/* ==========================================================================
+   TAKAR STYLE DASHBOARD - NEO-BRUTALIST STYLING
+   ========================================================================== */
 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+:root {
+  --paper: #FFF9E5;
+  --paper-card: #FFFFFF;
+  --neo-yellow: #FFD21F;
+  --neo-red: #E52B2B;
+  --neo-green: #2E8B45;
+  --neo-black: #111111;
+  --neo-light-green: #EBF9EE;
+  --neo-light-red: #FDE8E8;
+  --neo-light-yellow: #FFF8D6;
+  --neo-border: #111111;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: var(--paper);
+}
+
+body {
+  margin: 0;
+  background-color: var(--paper);
+  color: var(--neo-black);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  line-height: 1.5;
+}
+
+/* Neo-Brutalist Box Utilities */
+.neo-box {
+  border: 2px solid var(--neo-black);
+  box-shadow: 3px 3px 0px var(--neo-black);
+}
+
+.neo-box-thick {
+  border: 3px solid var(--neo-black);
+  box-shadow: 4px 4px 0px var(--neo-black);
+}
+
+.neo-badge {
+  border: 1.5px solid var(--neo-black);
+  box-shadow: 1.5px 1.5px 0px var(--neo-black);
+  font-family: 'Space Mono', monospace;
+}
+
+.shadow-neo-sm {
+  box-shadow: 2px 2px 0px var(--neo-black);
+}
+
+.shadow-neo {
+  box-shadow: 3px 3px 0px var(--neo-black);
+}
+
+.shadow-neo-lg {
+  box-shadow: 5px 5px 0px var(--neo-black);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--paper);
+  border-left: 2px solid var(--neo-black);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--neo-black);
+}
+
+/* Topic Tabs */
+.topic-tab {
+  background: #FFFFFF;
+  border: 2px solid var(--neo-black);
+  box-shadow: 2px 2px 0px var(--neo-black);
+  padding: 4px 12px;
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--neo-black);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.topic-tab:hover {
+  background: var(--neo-light-yellow);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px var(--neo-black);
+}
+.topic-tab.active {
+  background: var(--neo-light-green);
+  border: 2.5px solid var(--neo-black);
+  box-shadow: 3px 3px 0px var(--neo-black);
+}
+.topic-tab .count-badge {
+  background: var(--neo-black);
+  color: #FFFFFF;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  padding: 1px 4px;
+}
+
+/* Interactive Button Hover */
+button:active, .btn-press:active {
+  transform: translate(1px, 1px) !important;
+  box-shadow: 1px 1px 0px var(--neo-black) !important;
+}
+
+/* Table styling */
+.neo-table-wrap {
+  overflow-x: auto;
+  border: 2px solid var(--neo-black);
+  background: #FFFFFF;
+}
+
+.neo-table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+}
+
+.neo-table thead tr {
+  background-color: var(--neo-yellow);
+  border-bottom: 2px solid var(--neo-black);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.neo-table th {
+  padding: 10px 12px;
+  border-right: 2px solid var(--neo-black);
+  white-space: nowrap;
+}
+.neo-table th:last-child {
+  border-right: none;
+}
+
+.neo-table td {
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--neo-black);
+  border-right: 2px solid var(--neo-black);
+  vertical-align: middle;
+}
+.neo-table td:last-child {
+  border-right: none;
+}
+
+.neo-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.neo-table tbody tr:hover {
+  background-color: #FFFDEB;
+}
+
+/* Chips & Badges */
+.type-chip {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid var(--neo-black);
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.type-chip.type-review { background: #dff2e1; color: var(--neo-green); }
+.type-chip.type-resep { background: #fef0cd; color: #a16207; }
+.type-chip.type-ide_usaha { background: #dcf0fa; color: #0369a1; }
+.type-chip.type-lainnya { background: #f3f4f6; color: #4b5563; }
+
+.sentiment-badge-pos {
+  background-color: var(--neo-light-green);
+  color: var(--neo-green);
+  border: 1px solid var(--neo-black);
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 2px 6px;
+}
+.sentiment-badge-neu {
+  background-color: #FEF9C3;
+  color: var(--neo-black);
+  border: 1px solid var(--neo-black);
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 2px 6px;
+}
+.sentiment-badge-neg {
+  background-color: var(--neo-light-red);
+  color: var(--neo-red);
+  border: 1px solid var(--neo-black);
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 2px 6px;
+}
+
+/* Modals & Dialogs */
+dialog {
+  border: none;
+  background: transparent;
+  padding: 0;
+  max-width: 90vw;
+}
+dialog::backdrop {
+  background: rgba(17, 17, 17, 0.65);
+}
+
+.topic-dialog-card {
+  background: var(--paper);
+  border: 3px solid var(--neo-black);
+  box-shadow: 6px 6px 0px var(--neo-black);
+  width: 100%;
+  max-width: 580px;
+  padding: 24px;
+}
+
+/* Toast Notifications */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  background: var(--neo-yellow);
+  color: var(--neo-black);
+  border: 2px solid var(--neo-black);
+  box-shadow: 4px 4px 0px var(--neo-black);
+  padding: 12px 18px;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+  transition: all 0.25s ease;
+}
+.toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Live Pulse Animation */
+@keyframes neoPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.9); }
+}
+.animate-neo-pulse {
+  animation: neoPulse 1.8s infinite ease-in-out;
+}
