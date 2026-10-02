@@ -126,7 +126,7 @@ tbody tr:hover { background: #f7f6ef; }
 .maps-preview h3 { margin-top: 4px; font-size: 14px; }.maps-preview p:last-child { margin-top: 5px; color: var(--muted); font-size: 10px; }
 .maps-preview .source-chip { border-color: #c5cac6; color: var(--muted); }
 .maps-panel { margin: 0 22px 22px; padding: 25px 27px 12px; }
-.maps-data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 23px; margin-top: 18px; }
+.maps-data-grid { display: block; margin-top: 18px; }
 .maps-subtitle { margin-bottom: 2px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .maps-feed-list { display: grid; max-height: 270px; gap: 8px; overflow: auto; padding-top: 10px; }
 .maps-feed-item { border: 1px solid var(--line); border-radius: 10px; background: var(--paper); padding: 11px 12px; }

@@ -14,10 +14,23 @@ from app.models import ContentType
 from app.nlp.preprocess import normalize
 
 SIGNALS: dict[ContentType, tuple[str, ...]] = {
-    "review": ("review", "nyobain", "cobain", "jujur", "mukbang", "kuliner", "jajan", "viral", "rekomendasi", "taste test", "worth it"),
-    "resep": ("resep", "cara membuat", "cara bikin", "tutorial", "bikin sendiri", "diy", "homemade"),
-    "ide_usaha": ("ide usaha", "peluang usaha", "jualan", "modal", "hpp", "omzet", "franchise", "kemitraan", "gerobak", "untung"),
-    "lainnya": (),
+    "review": (
+        "review", "nyobain", "cobain", "jujur", "mukbang", "kuliner", "jajan", "viral",
+        "rekomendasi", "taste test", "worth it", "ulasan", "enak", "rating", "battle",
+        "vs", "unboxing", "kaki lima", "pinggir jalan", "terenak", "paling rame", "nyoba"
+    ),
+    "resep": (
+        "resep", "cara membuat", "cara bikin", "tutorial", "bikin sendiri", "diy",
+        "homemade", "masak sendiri", "mudah buatnya", "cukup di aduk", "biang"
+    ),
+    "ide_usaha": (
+        "ide usaha", "peluang usaha", "jualan", "modal", "hpp", "omzet", "franchise",
+        "kemitraan", "gerobak", "untung"
+    ),
+    "lainnya": (
+        "lagu", "cover", "chord", "karaoke", "lirik", "official music", "official video",
+        "podcast", "gameplay", "parodi", "prank", "asmr", "full album", "belajar"
+    ),
 }
 PRIORITY: tuple[ContentType, ...] = ("ide_usaha", "resep", "review")
 

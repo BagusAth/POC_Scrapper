@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     yt_max_videos_per_topic: int = 150
     yt_stats_interval_minutes: float = 60.0
     yt_comments_enabled: bool = False
+    yt_max_comments_per_video: int = 15
+    accepted_video_types: str = "review"
+    yt_strict_review_filter: bool = True
     youtube_http_timeout_seconds: float = 10.0
 
     google_maps_api_key: str = ""
@@ -100,8 +103,8 @@ class Settings(BaseSettings):
 
     @field_validator(
         "youtube_daily_quota", "yt_search_reserve_units", "yt_trend_lookback_days",
-        "yt_search_date_pages", "yt_max_videos_per_topic", "maps_max_pages",
-        "maps_max_places_per_search", "maps_max_reviews_per_place",
+        "yt_search_date_pages", "yt_max_videos_per_topic", "yt_max_comments_per_video",
+        "maps_max_pages", "maps_max_places_per_search", "maps_max_reviews_per_place",
         "maps_daily_request_cap", "maps_monthly_request_cap", "maps_content_ttl_days",
         "social_results_per_query", "social_max_queries_per_topic",
         "social_lookback_days", "social_daily_run_cap", "social_monthly_run_cap",

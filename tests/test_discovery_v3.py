@@ -51,7 +51,13 @@ async def test_discovery_keeps_only_current_product_video(tmp_path: Path) -> Non
     await database.init()
     topic = await database.create_topic(TopicCreate(name="Keripik Pisang", keywords=["keripik pisang"], product_terms=["keripik", "pisang"], exclude_terms=["sepatu"], cities=["Bandung"]))
     client = FakeTrendClient(now)
-    settings = Settings(database_path=tmp_path / "trend.db", yt_search_date_pages=2, yt_trend_lookback_days=90)
+    settings = Settings(
+        database_path=tmp_path / "trend.db",
+        yt_search_date_pages=2,
+        yt_trend_lookback_days=90,
+        accepted_video_types="review,ide_usaha",
+        yt_comments_enabled=False,
+    )
     discovery = TrendDiscovery(database, client, settings, ContentTypeClassifier("rules"))
 
     result = await discovery.discover(topic, now=now)
@@ -65,6 +71,30 @@ async def test_discovery_keeps_only_current_product_video(tmp_path: Path) -> Non
     await database.close()
 
 
+@pytest.mark.asyncio
+async def test_discovery_strictly_filters_product_review_only(tmp_path: Path) -> None:
+    now = datetime(2026, 9, 30, 5, tzinfo=timezone.utc)
+    database = Database(tmp_path / "trend_review.db")
+    await database.init()
+    topic = await database.create_topic(TopicCreate(name="Keripik Pisang", keywords=["keripik pisang"], product_terms=["keripik", "pisang"], exclude_terms=["sepatu"], cities=["Bandung"]))
+    client = FakeTrendClient(now)
+    settings = Settings(
+        database_path=tmp_path / "trend_review.db",
+        yt_search_date_pages=2,
+        yt_trend_lookback_days=90,
+        accepted_video_types="review",
+        yt_strict_review_filter=True,
+        yt_comments_enabled=False,
+    )
+    discovery = TrendDiscovery(database, client, settings, ContentTypeClassifier("rules"))
+
+    result = await discovery.discover(topic, now=now)
+
+    assert {video.video_id for video in result.videos} == {"good"}
+    assert {video.content_type for video in result.videos} == {"review"}
+    await database.close()
+
+
 def test_relevance_checks_product_and_exclusions() -> None:
     now = datetime.now(timezone.utc)
     topic_data = TopicCreate(name="Parfum Lokal", keywords=["parfum lokal"], product_terms=["parfum"], exclude_terms=["mobil"], cities=["Bandung"])
@@ -73,3 +103,5 @@ def test_relevance_checks_product_and_exclusions() -> None:
     assert is_relevant({"title": "Review parfum lokal tahan lama", "description": ""}, topic)
     assert not is_relevant({"title": "Parfum mobil lokal", "description": ""}, topic)
     assert not is_relevant({"title": "Wisata Bandung", "description": ""}, topic)
+    assert not is_relevant({"title": "Resep cara membuat parfum", "description": ""}, topic, strict_product_filter=True)
+

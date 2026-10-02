@@ -41,6 +41,7 @@ from app.products import ProductCatalog
 from app.topics.service import TopicService
 from app.youtube.client import PublicYouTubeClient, YouTubeClient
 from app.youtube.content_type import ContentTypeClassifier, GeminiTitleClassifier
+from app.youtube.comment_collector import YouTubeCommentCollector
 from app.youtube.quota import QuotaTracker
 from app.youtube.stats_snapshot import StatsSnapshotService
 from app.youtube.trend_discovery import TrendDiscovery
@@ -98,6 +99,7 @@ def create_app(
         social_client = SocialApifyClient(runtime, social_usage)
         social_collector = SocialCollector(database, social_client, runtime, broker)
     youtube_client: YouTubeClient | PublicYouTubeClient | None = None
+    youtube_comment_collector: YouTubeCommentCollector | None = None
     if "youtube_trend" in runtime.active_sources:
         youtube_client = (
             YouTubeClient(
@@ -106,6 +108,10 @@ def create_app(
             )
             if runtime.youtube_api_key
             else PublicYouTubeClient(timeout=runtime.youtube_http_timeout_seconds)
+        )
+        youtube_comment_collector = YouTubeCommentCollector(
+            runtime.youtube_api_key,
+            timeout=runtime.youtube_http_timeout_seconds,
         )
     gemini_title_classifier = None
     if runtime.video_classifier == "auto" and runtime.gemini_api_key:
@@ -119,7 +125,10 @@ def create_app(
         runtime.video_classifier, gemini=gemini_title_classifier
     )
     discovery = (
-        TrendDiscovery(database, youtube_client, runtime, classifier)
+        TrendDiscovery(
+            database, youtube_client, runtime, classifier,
+            broker=broker, comment_collector=youtube_comment_collector,
+        )
         if youtube_client else None
     )
     snapshot = (
@@ -175,6 +184,8 @@ def create_app(
                     await asyncio.gather(analyzer_task, return_exceptions=True)
             if youtube_client:
                 await youtube_client.close()
+            if youtube_comment_collector:
+                await youtube_comment_collector.close()
             if maps_client:
                 await maps_client.close()
             if social_client:

@@ -140,11 +140,20 @@ class PublicYouTubeClient:
     def _initial_data(html: str, markers: tuple[str, ...]) -> dict[str, Any]:
         decoder = json.JSONDecoder()
         for marker in markers:
-            index = html.find(marker)
-            if index >= 0:
-                parsed, _ = decoder.raw_decode(html[index + len(marker):].lstrip())
-                if isinstance(parsed, dict):
-                    return parsed
+            start = 0
+            while True:
+                index = html.find(marker, start)
+                if index < 0:
+                    break
+                candidate = html[index + len(marker):].lstrip()
+                if candidate.startswith("{"):
+                    try:
+                        parsed, _ = decoder.raw_decode(candidate)
+                        if isinstance(parsed, dict):
+                            return parsed
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+                start = index + len(marker)
         raise ValueError("Data awal YouTube tidak ditemukan")
 
     async def search_videos(
@@ -161,10 +170,14 @@ class PublicYouTubeClient:
             headers={"User-Agent": USER_AGENT, "Accept-Language": "id-ID,id;q=0.9"},
         )
         response.raise_for_status()
-        data = self._initial_data(
-            response.text,
-            ("var ytInitialData = ", "window['ytInitialData'] = ", "ytInitialData = "),
-        )
+        try:
+            data = self._initial_data(
+                response.text,
+                ("var ytInitialData = ", "window['ytInitialData'] = ", "ytInitialData = "),
+            )
+        except (ValueError, json.JSONDecodeError) as exc:
+            logger.warning("Data awal YouTube tidak dapat dibaca: %s", exc)
+            return [], None
         ids: list[str] = []
         now = datetime.now(timezone.utc)
         for node in walk(data):

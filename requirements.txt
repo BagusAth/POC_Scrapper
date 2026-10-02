@@ -8,4 +8,5 @@ google-genai
 google-play-scraper
 pytest
 pytest-asyncio
+tzdata
 

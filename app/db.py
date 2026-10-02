@@ -395,6 +395,30 @@ class Database:
         await self._conn().commit()
         return cursor.rowcount == 1
 
+    async def insert_youtube_comment(
+        self, *, topic_id: str, video_id: str, comment_id: str, text: str,
+        author_name: str | None = None, author_hash: str | None = None,
+        url: str | None = None, created_at: datetime, collected_at: datetime,
+        mentions_product: bool = True, category: str = "opini_produk",
+        max_comment_chars: int = 800,
+    ) -> bool:
+        cid = comment_id if comment_id.startswith("yt_") else f"yt_{comment_id}"
+        cursor = await self._conn().execute(
+            """INSERT OR IGNORE INTO comments
+               (id,topic_id,product_id,source,place_id,text,stars,author_name,
+                author_hash,url,created_at,collected_at,mentions_product,category,
+                status)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending')""",
+            (
+                cid, topic_id, topic_id, "youtube", video_id,
+                text[:max_comment_chars], None, author_name, author_hash, url,
+                to_utc_iso(created_at), to_utc_iso(collected_at), int(mentions_product),
+                category,
+            ),
+        )
+        await self._conn().commit()
+        return cursor.rowcount == 1
+
     async def count_relevant_places(self, topic_id: str) -> int:
         cursor = await self._conn().execute(
             "SELECT COUNT(*) FROM places WHERE topic_id=? AND is_relevant=1", (topic_id,)
@@ -703,7 +727,7 @@ class Database:
 
     async def fetch_pending(self, limit: int = 25, max_attempts: int = 5) -> list[Comment]:
         cursor = await self._conn().execute(
-            """SELECT * FROM comments WHERE (topic_id IS NULL OR source='gmaps') AND status='pending'
+            """SELECT * FROM comments WHERE (topic_id IS NULL OR source IN ('gmaps', 'youtube')) AND status='pending'
                AND attempts<? ORDER BY collected_at ASC LIMIT ?""", (max_attempts, limit),
         )
         return [_row_to_comment(row) for row in await cursor.fetchall()]

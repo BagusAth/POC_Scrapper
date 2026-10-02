@@ -11,7 +11,18 @@ from app.db import Database
 from app.models import Topic, Video, VideoStat
 from app.nlp.preprocess import normalize
 
+from app.events import EventBroker
+from .comment_collector import YouTubeCommentCollector
 from .content_type import ContentTypeClassifier
+
+NEGATIVE_PRODUCT_SIGNALS = (
+    "resep", "cara membuat", "cara bikin", "tutorial", "bikin sendiri",
+    "buat sendiri", "diy", "homemade", "masak sendiri", "mudah buatnya",
+    "cukup di aduk", "lagu", "cover", "chord", "karaoke", "lirik",
+    "official music", "official video", "podcast", "gameplay", "parodi",
+    "prank", "asmr", "full album", "belajar", "kursus", "pelatihan",
+    "biang", "10 liter",
+)
 
 
 class TrendClient(Protocol):
@@ -43,7 +54,7 @@ def build_query(topic: Topic) -> str:
     return "|".join(terms) + (" " + " ".join(excluded) if excluded else "")
 
 
-def is_relevant(item: dict[str, Any], topic: Topic) -> bool:
+def is_relevant(item: dict[str, Any], topic: Topic, *, strict_product_filter: bool = False) -> bool:
     if item.get("live_broadcast_content") == "upcoming":
         return False
     title = normalize(str(item.get("title", "")))
@@ -52,6 +63,9 @@ def is_relevant(item: dict[str, Any], topic: Topic) -> bool:
     excludes = [normalize(term) for term in topic.exclude_terms]
     if any(term and term in title for term in excludes):
         return False
+    if strict_product_filter:
+        if any(neg in title for neg in NEGATIVE_PRODUCT_SIGNALS):
+            return False
     signals = [normalize(value) for value in [*topic.keywords, *topic.product_terms]]
     return any(signal and signal in combined for signal in signals)
 
@@ -60,11 +74,15 @@ class TrendDiscovery:
     def __init__(
         self, database: Database, client: TrendClient, settings: Settings,
         classifier: ContentTypeClassifier,
+        broker: EventBroker | None = None,
+        comment_collector: YouTubeCommentCollector | None = None,
     ) -> None:
         self.database = database
         self.client = client
         self.settings = settings
         self.classifier = classifier
+        self.broker = broker
+        self.comment_collector = comment_collector
 
     async def discover(self, topic: Topic, *, now: datetime | None = None) -> DiscoveryResult:
         current = now or datetime.now(timezone.utc)
@@ -88,7 +106,8 @@ class TrendDiscovery:
             details.extend(await self.client.get_videos(unique_ids[start:start + 50]))
         filtered = [
             item for item in details
-            if is_relevant(item, topic) and self._published_at(item, current) >= cutoff
+            if is_relevant(item, topic, strict_product_filter=self.settings.yt_strict_review_filter)
+            and self._published_at(item, current) >= cutoff
         ]
         filtered.sort(
             key=lambda item: (
@@ -100,8 +119,16 @@ class TrendDiscovery:
         kinds = await self.classifier.classify([
             (str(item["video_id"]), str(item.get("title", ""))) for item in filtered
         ])
+        
+        # Filter strictly for accepted video types (e.g. review only)
+        accepted_types = {t.strip() for t in self.settings.accepted_video_types.split(",") if t.strip()}
+        accepted_filtered = [
+            item for item in filtered
+            if kinds.get(str(item["video_id"])) in accepted_types
+        ]
+        
         source = "public_search" if self.client.mode == "public" else "search_date"
-        videos = [self._video(item, topic.id, source, kinds[str(item["video_id"])], current) for item in filtered]
+        videos = [self._video(item, topic.id, source, kinds[str(item["video_id"])], current) for item in accepted_filtered]
         await self.database.upsert_videos(videos)
         initial_stats = [
             VideoStat(
@@ -109,13 +136,31 @@ class TrendDiscovery:
                 views=max(0, int(item.get("views", 0))),
                 likes=item.get("likes"), comments=item.get("comments"),
             )
-            for item in filtered
+            for item in accepted_filtered
         ]
         await self.database.insert_video_stats(initial_stats)
         await self.database.deactivate_old_videos(topic.id, cutoff)
         await self.database.update_topic_status(
             topic.id, "active" if videos else "limited", discovery_at=current
         )
+
+        # Scrape review comments from accepted review videos
+        if self.comment_collector and self.settings.yt_comments_enabled:
+            for video in videos:
+                try:
+                    await self.comment_collector.collect_and_store(
+                        video_id=video.video_id,
+                        topic_id=topic.id,
+                        database=self.database,
+                        broker=self.broker,
+                        max_comments=self.settings.yt_max_comments_per_video,
+                        max_comment_chars=self.settings.max_comment_chars,
+                    )
+                except Exception as exc:
+                    logging.getLogger(__name__).warning(
+                        "Scraping komentar video %s gagal: %s", video.video_id, exc
+                    )
+
         return DiscoveryResult(query, len(unique_ids), len(filtered), len(videos), videos)
 
     @staticmethod
